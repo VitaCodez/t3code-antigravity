@@ -314,7 +314,14 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         prompt,
         outputSchemaJson: outputSchema,
         modelSelection: input.modelSelection,
-      });
+      }).pipe(
+        Effect.catchCause(() =>
+          Effect.succeed({
+            subject: sanitizeCommitSubject(input.stagedSummary.slice(0, 72) || "update changes"),
+            body: input.stagedSummary.trim(),
+          }),
+        ),
+      );
 
       return {
         subject: sanitizeCommitSubject(generated.subject),
@@ -343,7 +350,14 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         prompt,
         outputSchemaJson: outputSchema,
         modelSelection: input.modelSelection,
-      });
+      }).pipe(
+        Effect.catchCause(() =>
+          Effect.succeed({
+            title: sanitizePrTitle(input.diffSummary.slice(0, 72) || "Update changes"),
+            body: input.diffSummary.trim(),
+          }),
+        ),
+      );
 
       return {
         title: sanitizePrTitle(generated.title),
@@ -369,7 +383,13 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         outputSchemaJson: outputSchema,
         imagePaths,
         modelSelection: input.modelSelection,
-      });
+      }).pipe(
+        Effect.catchCause(() =>
+          Effect.succeed({
+            branch: sanitizeBranchFragment(input.message.slice(0, 30) || "feature-branch"),
+          }),
+        ),
+      );
 
       return {
         branch: sanitizeBranchFragment(generated.branch),
@@ -395,7 +415,13 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
         outputSchemaJson: outputSchema,
         imagePaths,
         modelSelection: input.modelSelection,
-      });
+      }).pipe(
+        Effect.catchCause(() =>
+          Effect.succeed({
+            title: sanitizeThreadTitle(input.message.slice(0, 50) || "New Thread"),
+          }),
+        ),
+      );
 
       return {
         title: sanitizeThreadTitle(generated.title),
