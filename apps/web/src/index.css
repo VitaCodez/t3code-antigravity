@@ -1623,13 +1623,16 @@ label:has(> select#reasoning-effort) select {
 }
 
 /* KaTeX Math Formatting */
-.katex-display {
-  margin: 0.75em 0 !important;
+.chat-markdown .katex-display {
+  margin: 1.25em 0 !important;
   overflow-x: auto;
   overflow-y: hidden;
-  padding: 0.25em 0;
+  padding: 0.5em 0;
 }
-.katex {
-  font-size: 1.05em;
-  line-height: 1.2;
+.chat-markdown .katex {
+  font-size: 1.35em !important;
+  line-height: 1.35 !important;
+}
+.chat-markdown .katex-display > .katex {
+  font-size: 1.85em !important;
 }
