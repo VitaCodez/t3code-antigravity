@@ -34,10 +34,12 @@ import React, {
 import type { Components, Options as ReactMarkdownOptions } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import { defaultUrlTransform } from "react-markdown";
+import rehypeKatex from "rehype-katex";
 import rehypeRaw from "rehype-raw";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
 import { renderSkillInlineMarkdownChildren } from "./chat/SkillInlineText";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
@@ -144,7 +146,39 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
     ...defaultSchema.attributes,
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "title"),
     code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
+    span: [
+      ...(defaultSchema.attributes?.span ?? []),
+      "className",
+      "style",
+      "ariaHidden",
+      "aria-hidden",
+    ],
+    div: [...(defaultSchema.attributes?.div ?? []), "className", "style"],
+    annotation: ["encoding"],
   },
+  tagNames: [
+    ...(defaultSchema.tagNames ?? []),
+    "math",
+    "semantics",
+    "annotation",
+    "annotation-xml",
+    "mrow",
+    "mi",
+    "mo",
+    "mn",
+    "msup",
+    "msub",
+    "mfrac",
+    "msqrt",
+    "mroot",
+    "mover",
+    "munder",
+    "munderover",
+    "mtable",
+    "mtr",
+    "mtd",
+    "mtext",
+  ],
   protocols: {
     ...defaultSchema.protocols,
     href: [...(defaultSchema.protocols?.href ?? []), "file"],
@@ -153,6 +187,7 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
 
 const CHAT_MARKDOWN_REMARK_PLUGINS = [
   remarkGfm,
+  remarkMath,
   remarkNormalizeListItemIndentation,
   remarkPreserveCodeMeta,
   remarkTagInlineCode,
@@ -160,6 +195,7 @@ const CHAT_MARKDOWN_REMARK_PLUGINS = [
 
 const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
   remarkGfm,
+  remarkMath,
   remarkNormalizeListItemIndentation,
   remarkBreaks,
   remarkPreserveCodeMeta,
@@ -168,6 +204,7 @@ const CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS = [
 
 const CHAT_MARKDOWN_REHYPE_PLUGINS = [
   rehypeRaw,
+  rehypeKatex,
   [rehypeSanitize, CHAT_MARKDOWN_SANITIZE_SCHEMA],
 ] satisfies NonNullable<ReactMarkdownOptions["rehypePlugins"]>;
 

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark, .dark *));
 /* Window Controls Overlay: active when Electron exposes native titlebar control geometry. */
@@ -1619,4 +1620,16 @@ label:has(> select#reasoning-effort) select {
   background-color: Highlight;
   opacity: 0.3;
   pointer-events: none;
+}
+
+/* KaTeX Math Formatting */
+.katex-display {
+  margin: 0.75em 0 !important;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25em 0;
+}
+.katex {
+  font-size: 1.05em;
+  line-height: 1.2;
 }
