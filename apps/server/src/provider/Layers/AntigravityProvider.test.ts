@@ -27,17 +27,24 @@ describe("buildInitialAntigravityProviderSnapshot", () => {
     }),
   );
 
-  it.effect("returns a pending snapshot when enabled", () =>
-    Effect.gen(function* () {
-      const snapshot = yield* buildInitialAntigravityProviderSnapshot(
-        decodeAntigravitySettings({ enabled: true }),
-      );
-      expect(snapshot.enabled).toBe(true);
-      expect(snapshot.installed).toBe(true);
-      expect(snapshot.status).toBe("warning");
-      expect(snapshot.version).toBeNull();
-      expect(snapshot.message).toContain("Checking Antigravity CLI");
-    }),
+  it.effect(
+    "returns a pending snapshot when enabled with Gemini 3.7 Flash and Gemini 3.6 Flash",
+    () =>
+      Effect.gen(function* () {
+        const snapshot = yield* buildInitialAntigravityProviderSnapshot(
+          decodeAntigravitySettings({ enabled: true }),
+        );
+        expect(snapshot.enabled).toBe(true);
+        expect(snapshot.installed).toBe(true);
+        expect(snapshot.status).toBe("warning");
+        expect(snapshot.version).toBeNull();
+        expect(snapshot.message).toContain("Checking Antigravity CLI");
+
+        const modelSlugs = snapshot.models.map((m) => m.slug);
+        expect(modelSlugs).toContain("gemini-3.7-flash");
+        expect(modelSlugs).toContain("gemini-3.6-flash");
+        expect(modelSlugs).not.toContain("gemini-3.6-pro");
+      }),
   );
 });
 

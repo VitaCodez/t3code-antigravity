@@ -55,14 +55,14 @@ const VERSION_PROBE_TIMEOUT_MS = 4_000;
 
 export const ANTIGRAVITY_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
   {
-    slug: "gemini-3.6-flash",
-    name: "Gemini 3.6 Flash",
+    slug: "gemini-3.7-flash",
+    name: "Gemini 3.7 Flash",
     isCustom: false,
     capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
   },
   {
-    slug: "gemini-3.6-pro",
-    name: "Gemini 3.6 Pro",
+    slug: "gemini-3.6-flash",
+    name: "Gemini 3.6 Flash",
     isCustom: false,
     capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
   },
@@ -111,9 +111,13 @@ function antigravityModelsFromSettings(
   customModels: ReadonlyArray<string> | undefined,
   builtInModels: ReadonlyArray<ServerProviderModel> = ANTIGRAVITY_BUILT_IN_MODELS,
 ): ReadonlyArray<ServerProviderModel> {
+  const sanitizedCustomModels = (customModels ?? []).filter((m) => {
+    const lower = m.toLowerCase();
+    return !lower.includes("pro") && !lower.includes("3.5");
+  });
   return providerModelsFromSettings(
     builtInModels,
-    customModels ?? [],
+    sanitizedCustomModels,
     ANTIGRAVITY_MODEL_CAPABILITIES,
   );
 }

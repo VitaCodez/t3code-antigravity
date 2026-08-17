@@ -1190,67 +1190,81 @@ const stageResourceMonitor = Effect.fn("stageResourceMonitor")(function* (input:
   const manifestPath = path.join(input.repoRoot, "native/resource-monitor/Cargo.toml");
   const executableName = resourceMonitorExecutableName(input.platform);
   const rustTargets = resolveResourceMonitorRustTargets(input.platform, input.arch);
-  const builtBinaries: string[] = [];
-
-  for (const rustTarget of rustTargets) {
-    const spawnCommand = yield* resolveSpawnCommand("cargo", [
-      "build",
-      "--locked",
-      "--release",
-      "--manifest-path",
-      manifestPath,
-      "--target",
-      rustTarget,
-    ]);
-    yield* runCommand(
-      ChildProcess.make(spawnCommand.command, spawnCommand.args, {
-        cwd: input.repoRoot,
-        shell: spawnCommand.shell,
-      }),
-      {
-        label: `cargo build resource monitor (${rustTarget})`,
-        verbose: input.verbose,
-      },
-    );
-
-    const binaryPath = path.join(
-      input.repoRoot,
-      "native/resource-monitor/target",
-      rustTarget,
-      "release",
-      executableName,
-    );
-    if (!(yield* fs.exists(binaryPath))) {
-      return yield* new ResourceMonitorBuildOutputMissingError({
-        binaryPath,
-        rustTarget,
-        platform: input.platform,
-        arch: input.arch,
-      });
-    }
-    builtBinaries.push(binaryPath);
-  }
-
   const destinationDirectory = path.join(input.stageResourcesDir, "resource-monitor");
   const destinationPath = path.join(destinationDirectory, executableName);
+
   yield* fs.remove(destinationDirectory, { recursive: true, force: true }).pipe(Effect.ignore);
   yield* fs.makeDirectory(destinationDirectory, { recursive: true });
 
-  if (builtBinaries.length === 1) {
-    yield* fs.copyFile(builtBinaries[0]!, destinationPath);
-  } else {
-    yield* runCommand(
-      ChildProcess.make("lipo", ["-create", ...builtBinaries, "-output", destinationPath]),
-      {
-        label: "lipo resource monitor universal binary",
-        verbose: input.verbose,
-      },
-    );
-  }
+  const buildEffect = Effect.gen(function* () {
+    const builtBinaries: string[] = [];
+    for (const rustTarget of rustTargets) {
+      const spawnCommand = yield* resolveSpawnCommand("cargo", [
+        "build",
+        "--locked",
+        "--release",
+        "--manifest-path",
+        manifestPath,
+        "--target",
+        rustTarget,
+      ]);
+      yield* runCommand(
+        ChildProcess.make(spawnCommand.command, spawnCommand.args, {
+          cwd: input.repoRoot,
+          shell: spawnCommand.shell,
+        }),
+        {
+          label: `cargo build resource monitor (${rustTarget})`,
+          verbose: input.verbose,
+        },
+      );
 
-  if (input.platform !== "win") {
-    yield* fs.chmod(destinationPath, 0o755);
-  }
+      const binaryPath = path.join(
+        input.repoRoot,
+        "native/resource-monitor/target",
+        rustTarget,
+        "release",
+        executableName,
+      );
+      if (!(yield* fs.exists(binaryPath))) {
+        return yield* new ResourceMonitorBuildOutputMissingError({
+          binaryPath,
+          rustTarget,
+          platform: input.platform,
+          arch: input.arch,
+        });
+      }
+      builtBinaries.push(binaryPath);
+    }
+
+    if (builtBinaries.length === 1) {
+      yield* fs.copyFile(builtBinaries[0]!, destinationPath);
+    } else {
+      yield* runCommand(
+        ChildProcess.make("lipo", ["-create", ...builtBinaries, "-output", destinationPath]),
+        {
+          label: "lipo resource monitor universal binary",
+          verbose: input.verbose,
+        },
+      );
+    }
+
+    if (input.platform !== "win") {
+      yield* fs.chmod(destinationPath, 0o755);
+    }
+  });
+
+  yield* buildEffect.pipe(
+    Effect.catchCause((cause) =>
+      Effect.gen(function* () {
+        yield* Effect.logWarning(
+          "[desktop-artifact] Rust (`cargo`) is not installed or build failed; continuing without native resource monitor.",
+          { cause: String(cause) },
+        );
+        yield* fs.writeFileString(destinationPath, "");
+      }),
+    ),
+  );
 });
 
 function generateMacIconSet(

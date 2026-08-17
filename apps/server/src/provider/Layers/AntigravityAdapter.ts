@@ -21,12 +21,16 @@ import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
+import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { ServerConfig } from "../../config.ts";
+import { resolveAttachmentPath } from "../../attachmentStore.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = NodePath.dirname(__filename);
@@ -85,6 +89,26 @@ import {
 import type { AntigravityAdapterShape } from "../Services/AntigravityAdapter.ts";
 
 const PROVIDER = ProviderDriverKind.make("antigravity");
+export const ANTIGRAVITY_RESUME_VERSION = 1 as const;
+
+export interface AntigravityResumeCursor {
+  readonly schemaVersion: typeof ANTIGRAVITY_RESUME_VERSION;
+  readonly conversationId: string;
+}
+
+export function parseAntigravityResume(raw: unknown): AntigravityResumeCursor | undefined {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return undefined;
+  }
+  const record = raw as Record<string, unknown>;
+  if (typeof record.conversationId === "string" && record.conversationId.trim().length > 0) {
+    return {
+      schemaVersion: ANTIGRAVITY_RESUME_VERSION,
+      conversationId: record.conversationId.trim(),
+    };
+  }
+  return undefined;
+}
 
 export interface AntigravityAdapterLiveOptions {
   readonly environment?: NodeJS.ProcessEnv;
@@ -98,6 +122,7 @@ interface AntigravitySessionContext {
   activeTurnId: TurnId | undefined;
   turns: Array<{ id: TurnId; items: Array<unknown> }>;
   currentModelId: string | undefined;
+  agyConversationId: string | undefined;
 }
 
 export function makeAntigravityAdapter(
@@ -111,6 +136,10 @@ export function makeAntigravityAdapter(
   return Effect.gen(function* () {
     const adapterScope = yield* Scope.Scope;
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const maybeServerConfig = yield* Effect.serviceOption(ServerConfig);
+    const attachmentsDir = Option.isSome(maybeServerConfig)
+      ? maybeServerConfig.value.attachmentsDir
+      : process.cwd();
     const processEnv = options.environment ?? process.env;
     const instanceId = options.instanceId ?? ProviderInstanceId.make("antigravity");
 
@@ -131,7 +160,10 @@ export function makeAntigravityAdapter(
       Effect.gen(function* () {
         const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
         const checkedAt = yield* nowIso;
-        const requestedModel = input.modelSelection?.model ?? "gemini-3.6-flash";
+        const requestedModel = input.modelSelection?.model ?? "gemini-3.7-flash";
+        const resume = parseAntigravityResume(input.resumeCursor);
+        const agyConversationId = resume?.conversationId;
+
         const session: ProviderSession = {
           provider: PROVIDER,
           providerInstanceId: instanceId,
@@ -140,6 +172,14 @@ export function makeAntigravityAdapter(
           cwd: input.cwd,
           model: requestedModel,
           threadId: input.threadId,
+          ...(resume
+            ? {
+                resumeCursor: {
+                  schemaVersion: ANTIGRAVITY_RESUME_VERSION,
+                  conversationId: resume.conversationId,
+                },
+              }
+            : {}),
           createdAt: checkedAt,
           updatedAt: checkedAt,
         };
@@ -151,11 +191,13 @@ export function makeAntigravityAdapter(
           activeTurnId: undefined,
           turns: [],
           currentModelId: requestedModel,
+          agyConversationId,
         };
 
         yield* Effect.logInfo("antigravity.startSession", {
           threadId: input.threadId,
           model: requestedModel,
+          agyConversationId,
         });
 
         yield* Ref.update(sessionsRef, (map) => new Map(map).set(input.threadId, ctx));
@@ -167,7 +209,10 @@ export function makeAntigravityAdapter(
           threadId: input.threadId,
           createdAt: checkedAt,
           type: "session.started",
-          payload: {},
+          payload: {
+            ...(agyConversationId ? { providerThreadId: agyConversationId } : {}),
+            ...(session.resumeCursor !== undefined ? { resume: session.resumeCursor } : {}),
+          },
         });
 
         return session;
@@ -195,14 +240,31 @@ export function makeAntigravityAdapter(
         ctx.activeTurnId = turnId;
 
         let textPrompt = typeof input.input === "string" ? input.input.trim() : "";
+        const imagePaths: Array<string> = [];
+        const activeCwd = ctx.session.cwd;
+
         if (input.attachments && input.attachments.length > 0) {
           const attachmentLines = input.attachments
             .map((att) => {
-              if (att.type === "file" && att.path) {
-                return `[Attached File: ${att.path}]`;
+              if (att.type === "file") {
+                const filePath =
+                  att.path ??
+                  resolveAttachmentPath({
+                    attachmentsDir,
+                    attachment: att,
+                  });
+                return filePath ? `[Attached File: ${filePath}]` : `[Attached File: ${att.name}]`;
               }
-              if (att.type === "image" && att.path) {
-                return `[Attached Image: ${att.path}]`;
+              if (att.type === "image") {
+                const imgPath = resolveAttachmentPath({
+                  attachmentsDir,
+                  attachment: att,
+                });
+                if (imgPath) {
+                  imagePaths.push(imgPath);
+                  return `[Attached Image: ${imgPath}]`;
+                }
+                return `[Attached Image: ${att.name}]`;
               }
               return `[Attached ${att.type}]`;
             })
@@ -210,8 +272,12 @@ export function makeAntigravityAdapter(
           textPrompt = textPrompt ? `${textPrompt}\n\n${attachmentLines}` : attachmentLines;
         }
 
+        if (activeCwd && !textPrompt.includes("[Active Workspace Folder:")) {
+          textPrompt = `[Active Workspace Folder: ${activeCwd}]\n\n${textPrompt}`;
+        }
+
         const selectedModel =
-          input.modelSelection?.model ?? ctx.currentModelId ?? "gemini-3.6-flash";
+          input.modelSelection?.model ?? ctx.currentModelId ?? "gemini-3.7-flash";
         const effortOption = input.modelSelection?.options?.find((opt) => opt.id === "effort");
         const effortValue = typeof effortOption?.value === "string" ? effortOption.value : "medium";
 
@@ -230,13 +296,25 @@ export function makeAntigravityAdapter(
             "--effort",
             effortValue,
           ];
+          if (activeCwd) {
+            pyArgs.push("--cwd", activeCwd);
+          }
+          for (const imgPath of imagePaths) {
+            pyArgs.push("--image", imgPath);
+          }
           spawnCommand = { command: pythonBinary, args: pyArgs, shell: false };
         } else {
           const binary = settings.binaryPath || "agy";
-          const args: Array<string> = ["--print", textPrompt, "--dangerously-skip-permissions"];
+          const args: Array<string> = [
+            "--print",
+            textPrompt,
+            "--dangerously-skip-permissions",
+            "--output-format",
+            "stream-json",
+          ];
 
-          if (ctx.turns.length > 0) {
-            args.push("--continue");
+          if (ctx.agyConversationId) {
+            args.push("--conversation", ctx.agyConversationId);
           }
 
           if (selectedModel) {
@@ -256,6 +334,7 @@ export function makeAntigravityAdapter(
           prompt: textPrompt,
           command: spawnCommand.command,
           args: spawnCommand.args,
+          agyConversationId: ctx.agyConversationId,
         });
 
         const itemId = RuntimeItemId.make(`item-${turnId}`);
@@ -315,58 +394,106 @@ export function makeAntigravityAdapter(
         const runFiber = yield* Effect.gen(function* () {
           let fullText = "";
           let stderrText = "";
+          let stdoutBuffer = "";
 
-          yield* Effect.all(
-            [
-              Stream.runForEach(child.stdout, (chunk) =>
-                Effect.gen(function* () {
-                  const text = new TextDecoder().decode(chunk);
-                  yield* Effect.logInfo("antigravity.stdout.chunk", { textLength: text.length });
+          const processLine = (line: string): Effect.Effect<void> =>
+            Effect.gen(function* () {
+              const trimmed = line.trim();
+              if (!trimmed) return;
 
-                  if (settings.usePythonSdk) {
-                    const lines = text.split("\n");
-                    for (const line of lines) {
-                      const trimmed = line.trim();
-                      if (!trimmed) continue;
-                      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
-                        try {
-                          const parsed = JSON.parse(trimmed);
-                          if (parsed.type === "token" && parsed.content) {
-                            fullText += parsed.content;
-                            yield* emitEvent({
-                              eventId: makeEventId("content.delta", input.threadId, turnId),
-                              provider: PROVIDER,
-                              providerInstanceId: instanceId,
-                              threadId: input.threadId,
-                              turnId,
-                              itemId,
-                              createdAt: new Date().toISOString(),
-                              type: "content.delta",
-                              payload: { streamKind: "assistant_text", delta: parsed.content },
-                            });
-                            continue;
-                          }
-                          if (parsed.type === "thought" && parsed.content) {
-                            yield* emitEvent({
-                              eventId: makeEventId("content.delta", input.threadId, turnId),
-                              provider: PROVIDER,
-                              providerInstanceId: instanceId,
-                              threadId: input.threadId,
-                              turnId,
-                              itemId,
-                              createdAt: new Date().toISOString(),
-                              type: "content.delta",
-                              payload: { streamKind: "thought", delta: parsed.content },
-                            });
-                            continue;
-                          }
-                        } catch {
-                          // Ignore parse error and fallback to raw text below
-                        }
-                      }
+              if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+                try {
+                  const parsed = JSON.parse(trimmed);
+
+                  if (parsed.event === "init" && parsed.conversation_id) {
+                    ctx.agyConversationId = String(parsed.conversation_id);
+                    ctx.session.resumeCursor = {
+                      schemaVersion: ANTIGRAVITY_RESUME_VERSION,
+                      conversationId: ctx.agyConversationId,
+                    };
+                    yield* Effect.logInfo("antigravity.conversation.init", {
+                      conversationId: ctx.agyConversationId,
+                    });
+                    return;
+                  }
+
+                  if (parsed.event === "step_update" && parsed.step_update) {
+                    const step = parsed.step_update;
+                    if (step.conversation_id && !ctx.agyConversationId) {
+                      ctx.agyConversationId = String(step.conversation_id);
+                      ctx.session.resumeCursor = {
+                        schemaVersion: ANTIGRAVITY_RESUME_VERSION,
+                        conversationId: ctx.agyConversationId,
+                      };
                     }
-                  } else {
-                    fullText += text;
+                    if (
+                      step.step_type === "agent_response" &&
+                      typeof step.text_delta === "string" &&
+                      step.text_delta.length > 0
+                    ) {
+                      fullText += step.text_delta;
+                      yield* emitEvent({
+                        eventId: makeEventId("content.delta", input.threadId, turnId),
+                        provider: PROVIDER,
+                        providerInstanceId: instanceId,
+                        threadId: input.threadId,
+                        turnId,
+                        itemId,
+                        createdAt: new Date().toISOString(),
+                        type: "content.delta",
+                        payload: { streamKind: "assistant_text", delta: step.text_delta },
+                      });
+                      return;
+                    }
+                    if (
+                      step.step_type === "thought" &&
+                      typeof step.text_delta === "string" &&
+                      step.text_delta.length > 0
+                    ) {
+                      yield* emitEvent({
+                        eventId: makeEventId("content.delta", input.threadId, turnId),
+                        provider: PROVIDER,
+                        providerInstanceId: instanceId,
+                        threadId: input.threadId,
+                        turnId,
+                        itemId,
+                        createdAt: new Date().toISOString(),
+                        type: "content.delta",
+                        payload: { streamKind: "thought", delta: step.text_delta },
+                      });
+                      return;
+                    }
+                    return;
+                  }
+
+                  if (parsed.event === "result" && parsed.result) {
+                    const res = parsed.result;
+                    if (res.conversation_id) {
+                      ctx.agyConversationId = String(res.conversation_id);
+                      ctx.session.resumeCursor = {
+                        schemaVersion: ANTIGRAVITY_RESUME_VERSION,
+                        conversationId: ctx.agyConversationId,
+                      };
+                    }
+                    if (typeof res.response === "string" && !fullText) {
+                      fullText = res.response;
+                      yield* emitEvent({
+                        eventId: makeEventId("content.delta", input.threadId, turnId),
+                        provider: PROVIDER,
+                        providerInstanceId: instanceId,
+                        threadId: input.threadId,
+                        turnId,
+                        itemId,
+                        createdAt: new Date().toISOString(),
+                        type: "content.delta",
+                        payload: { streamKind: "assistant_text", delta: res.response },
+                      });
+                    }
+                    return;
+                  }
+
+                  if (parsed.type === "token" && parsed.content) {
+                    fullText += parsed.content;
                     yield* emitEvent({
                       eventId: makeEventId("content.delta", input.threadId, turnId),
                       provider: PROVIDER,
@@ -376,11 +503,60 @@ export function makeAntigravityAdapter(
                       itemId,
                       createdAt: new Date().toISOString(),
                       type: "content.delta",
-                      payload: {
-                        streamKind: "assistant_text",
-                        delta: text,
-                      },
+                      payload: { streamKind: "assistant_text", delta: parsed.content },
                     });
+                    return;
+                  }
+
+                  if (parsed.type === "thought" && parsed.content) {
+                    yield* emitEvent({
+                      eventId: makeEventId("content.delta", input.threadId, turnId),
+                      provider: PROVIDER,
+                      providerInstanceId: instanceId,
+                      threadId: input.threadId,
+                      turnId,
+                      itemId,
+                      createdAt: new Date().toISOString(),
+                      type: "content.delta",
+                      payload: { streamKind: "thought", delta: parsed.content },
+                    });
+                    return;
+                  }
+                } catch {
+                  // Fall through to plain text
+                }
+              }
+
+              fullText += line + "\n";
+              yield* emitEvent({
+                eventId: makeEventId("content.delta", input.threadId, turnId),
+                provider: PROVIDER,
+                providerInstanceId: instanceId,
+                threadId: input.threadId,
+                turnId,
+                itemId,
+                createdAt: new Date().toISOString(),
+                type: "content.delta",
+                payload: {
+                  streamKind: "assistant_text",
+                  delta: line + "\n",
+                },
+              });
+            });
+
+          yield* Effect.all(
+            [
+              Stream.runForEach(child.stdout, (chunk) =>
+                Effect.gen(function* () {
+                  const text = new TextDecoder().decode(chunk);
+                  yield* Effect.logInfo("antigravity.stdout.chunk", { textLength: text.length });
+                  stdoutBuffer += text;
+
+                  const lines = stdoutBuffer.split("\n");
+                  stdoutBuffer = lines.pop() ?? "";
+
+                  for (const line of lines) {
+                    yield* processLine(line);
                   }
                 }),
               ),
@@ -395,11 +571,16 @@ export function makeAntigravityAdapter(
             { concurrency: "unbounded" },
           );
 
+          if (stdoutBuffer.trim().length > 0) {
+            yield* processLine(stdoutBuffer);
+          }
+
           const exitCode = yield* child.exitCode;
           yield* Effect.logInfo("antigravity.process.exit", {
             exitCode,
             fullTextLength: fullText.length,
             stderrLength: stderrText.length,
+            agyConversationId: ctx.agyConversationId,
           });
 
           if (exitCode !== 0 && stderrText.trim() && !fullText) {
@@ -450,6 +631,10 @@ export function makeAntigravityAdapter(
             type: "turn.completed",
             payload: {
               state: exitCode === 0 ? "completed" : "failed",
+              ...(ctx.agyConversationId ? { providerThreadId: ctx.agyConversationId } : {}),
+              ...(ctx.session.resumeCursor !== undefined
+                ? { resumeCursor: ctx.session.resumeCursor }
+                : {}),
             },
           });
         }).pipe(

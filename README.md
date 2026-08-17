@@ -1,8 +1,21 @@
-# T3 Code
+# T3 Code (Antigravity Edition)
+
+> [!IMPORTANT]
+> **Fork & Attribution Notice:**  
+> This project is a customized fork and extension of [**T3 Code**](https://github.com/pingdotgg/t3code), originally created by [Theo Browne (t3.gg)](https://t3.gg) and [pingdotgg](https://github.com/pingdotgg).  
+> All core architecture, design, and foundational code are the original work of [T3 Tools Inc. / pingdotgg](https://github.com/pingdotgg/t3code) under the MIT License. This repository includes custom extensions and community features described below.
+
+## 🚀 Added Features & Modifications
+
+- 🛸 **Antigravity AI Provider**: Added Google Antigravity (`agy` CLI) as an integrated coding agent provider alongside Claude, Codex, Cursor, Grok, and OpenCode.
+- 📐 **LaTeX Math Rendering**: Integrated full LaTeX rendering support for mathematical formulas and notation inside chat messages.
+- 💬 **Conversations Sidebar**: Added a dedicated **Conversations** field/history viewer in the sidebar for quickly browsing, searching, and opening recent conversation sessions.
+
+---
 
 T3 Code is an "agent harness control surface". It enables control of the agents on your machine with a best-in-class mobile app ([iOS](https://apps.apple.com/us/app/t3-code-remote-claude-more/id6787819824), [Android](https://play.google.com/store/apps/details?id=com.t3tools.t3code)), [web app](https://app.t3.codes) and [Electron-based desktop app](https://t3.codes).
 
-Works with your subscriptions on Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, T3 Code can control them.
+Works with your subscriptions on Antigravity, Claude Code, Codex, Cursor, Grok Build, and OpenCode. If they're set up on your computer, T3 Code can control them.
 
 ## "Wait, what are you selling me?"
 
@@ -13,8 +26,9 @@ We wanted something performant, remote-ready, and truly open. If we ever go the 
 ## Installation
 
 > [!WARNING]
-> T3 Code currently supports Codex, Claude, Cursor, Grok Build and OpenCode. Install and authenticate at least one provider before use:
+> T3 Code currently supports Antigravity, Codex, Claude, Cursor, Grok Build and OpenCode. Install and authenticate at least one provider before use:
 >
+> - Antigravity: install Antigravity CLI (`agy`) and ensure it is available in your PATH
 > - Codex: install [Codex CLI](https://developers.openai.com/codex/cli) and run `codex login`
 > - Claude: install [Claude Code](https://claude.com/product/claude-code) and run `claude auth login`
 > - Cursor: install [Cursor CLI](https://cursor.com/cli) and run `agent login`
@@ -105,3 +119,10 @@ vp i
 Read [CONTRIBUTING.md](./CONTRIBUTING.md) before opening an issue or PR.
 
 Need support? Join the [Discord](https://discord.gg/jn4EGJjrvv).
+
+## License & Credits
+
+This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+
+- Original T3 Code: Copyright (c) 2026 T3 Tools Inc. / [pingdotgg/t3code](https://github.com/pingdotgg/t3code)
+- Antigravity integration, LaTeX support & custom modifications: Copyright (c) 2026 Vita Skacel

@@ -6,7 +6,12 @@ import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as Schema from "effect/Schema";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { AntigravitySettings, ProviderDriverKind, ThreadId } from "@t3tools/contracts";
+import {
+  AntigravitySettings,
+  ChatAttachment,
+  ProviderDriverKind,
+  ThreadId,
+} from "@t3tools/contracts";
 
 import { makeAntigravityAdapter } from "./AntigravityAdapter.ts";
 
@@ -81,6 +86,97 @@ it.layer(testLayer)("AntigravityAdapter", (it) => {
           expect(eventOpt.value.type).toBe("session.started");
           expect(eventOpt.value.threadId).toBe(threadId);
         }
+      }),
+    ),
+  );
+
+  it.effect("handles sendTurn with image attachments gracefully", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const settings = decodeAntigravitySettings({ enabled: true });
+        const adapter = yield* makeAntigravityAdapter(settings);
+        const threadId = ThreadId.make("thread-test-3");
+
+        yield* adapter.startSession({
+          threadId,
+          cwd: process.cwd(),
+          runtimeMode: "full-access",
+        });
+
+        const imageAttachment = {
+          type: "image" as const,
+          id: "thread-test-12345678-1234-1234-1234-123456789abc",
+          mimeType: "image/png",
+          name: "screenshot.png",
+        } as unknown as ChatAttachment;
+
+        const result = yield* adapter.sendTurn({
+          threadId,
+          input: "what is on the picture",
+          attachments: [imageAttachment],
+        });
+
+        expect(result.threadId).toBe(threadId);
+        expect(result.turnId).toBeDefined();
+      }),
+    ),
+  );
+
+  it.effect("includes active workspace cwd in sendTurn prompts", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const settings = decodeAntigravitySettings({ enabled: true });
+        const adapter = yield* makeAntigravityAdapter(settings);
+        const threadId = ThreadId.make("thread-test-4");
+        const customCwd = "/tmp/my-active-workspace";
+
+        yield* adapter.startSession({
+          threadId,
+          cwd: customCwd,
+          runtimeMode: "full-access",
+        });
+
+        const result = yield* adapter.sendTurn({
+          threadId,
+          input: "where am I?",
+        });
+
+        expect(result.threadId).toBe(threadId);
+        expect(result.turnId).toBeDefined();
+      }),
+    ),
+  );
+
+  it.effect("restores conversationId from resumeCursor on startSession", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const settings = decodeAntigravitySettings({ enabled: true });
+        const adapter = yield* makeAntigravityAdapter(settings);
+        const threadId = ThreadId.make("thread-test-5");
+        const existingConvId = "8c912790-21f6-47be-8ede-c7bd74d27f58";
+
+        const session = yield* adapter.startSession({
+          threadId,
+          cwd: process.cwd(),
+          runtimeMode: "full-access",
+          resumeCursor: {
+            schemaVersion: 1,
+            conversationId: existingConvId,
+          },
+        });
+
+        expect(session.threadId).toBe(threadId);
+        expect(session.resumeCursor).toEqual({
+          schemaVersion: 1,
+          conversationId: existingConvId,
+        });
+
+        const result = yield* adapter.sendTurn({
+          threadId,
+          input: "continue our chat",
+        });
+
+        expect(result.threadId).toBe(threadId);
       }),
     ),
   );
