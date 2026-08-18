@@ -8,6 +8,11 @@ import json
 import os
 import sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 def emit_event(event_type: str, data: dict):
     payload = {"type": event_type, **data}
     sys.stdout.write(json.dumps(payload) + "\n")

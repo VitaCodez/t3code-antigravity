@@ -55,6 +55,7 @@ export function resolveAntigravitySpawnCommand(
   if (!binary.includes("\\") && !binary.includes("/")) {
     const localAppData = env.LOCALAPPDATA?.trim();
     const userProfile = env.USERPROFILE?.trim();
+    const appData = env.APPDATA?.trim();
     if (localAppData && NodeFS.existsSync(`${localAppData}\\agy\\bin\\agy.exe`)) {
       resolvedBinary = `${localAppData}\\agy\\bin\\agy.exe`;
     } else if (
@@ -62,6 +63,15 @@ export function resolveAntigravitySpawnCommand(
       NodeFS.existsSync(`${userProfile}\\.gemini\\antigravity\\bin\\agy.exe`)
     ) {
       resolvedBinary = `${userProfile}\\.gemini\\antigravity\\bin\\agy.exe`;
+    } else if (
+      localAppData &&
+      NodeFS.existsSync(`${localAppData}\\Programs\\Antigravity\\bin\\agy.exe`)
+    ) {
+      resolvedBinary = `${localAppData}\\Programs\\Antigravity\\bin\\agy.exe`;
+    } else if (appData && NodeFS.existsSync(`${appData}\\Antigravity\\bin\\agy.exe`)) {
+      resolvedBinary = `${appData}\\Antigravity\\bin\\agy.exe`;
+    } else if (appData && NodeFS.existsSync(`${appData}\\Roaming\\Antigravity\\bin\\agy.exe`)) {
+      resolvedBinary = `${appData}\\Roaming\\Antigravity\\bin\\agy.exe`;
     }
   }
 
@@ -279,7 +289,10 @@ export function makeAntigravityAdapter(
         const selectedModel =
           input.modelSelection?.model ?? ctx.currentModelId ?? "gemini-3.7-flash";
         const effortOption = input.modelSelection?.options?.find((opt) => opt.id === "effort");
-        const effortValue = typeof effortOption?.value === "string" ? effortOption.value : "medium";
+        const rawEffort =
+          typeof effortOption?.value === "string" ? effortOption.value.trim().toLowerCase() : "";
+        const validEfforts = ["low", "medium", "high"];
+        const effortValue = validEfforts.includes(rawEffort) ? rawEffort : "medium";
 
         let spawnCommand: { command: string; args: Array<string>; shell: boolean };
 
@@ -475,7 +488,28 @@ export function makeAntigravityAdapter(
                         conversationId: ctx.agyConversationId,
                       };
                     }
-                    if (typeof res.response === "string" && !fullText) {
+                    if (res.status === "ERROR" || res.error) {
+                      const errorMsg = String(
+                        res.error || res.response || "Antigravity turn error",
+                      );
+                      if (!fullText) {
+                        fullText = `Error: ${errorMsg}`;
+                        yield* emitEvent({
+                          eventId: makeEventId("content.delta", input.threadId, turnId),
+                          provider: PROVIDER,
+                          providerInstanceId: instanceId,
+                          threadId: input.threadId,
+                          turnId,
+                          itemId,
+                          createdAt: new Date().toISOString(),
+                          type: "content.delta",
+                          payload: {
+                            streamKind: "assistant_text",
+                            delta: `\n\n**Error:** ${errorMsg}\n`,
+                          },
+                        });
+                      }
+                    } else if (typeof res.response === "string" && !fullText) {
                       fullText = res.response;
                       yield* emitEvent({
                         eventId: makeEventId("content.delta", input.threadId, turnId),
@@ -546,26 +580,30 @@ export function makeAntigravityAdapter(
 
           yield* Effect.all(
             [
-              Stream.runForEach(child.stdout, (chunk) =>
-                Effect.gen(function* () {
-                  const text = new TextDecoder().decode(chunk);
-                  yield* Effect.logInfo("antigravity.stdout.chunk", { textLength: text.length });
-                  stdoutBuffer += text;
+              child.stdout.pipe(
+                Stream.decodeText(),
+                Stream.runForEach((text) =>
+                  Effect.gen(function* () {
+                    yield* Effect.logInfo("antigravity.stdout.chunk", { textLength: text.length });
+                    stdoutBuffer += text;
 
-                  const lines = stdoutBuffer.split("\n");
-                  stdoutBuffer = lines.pop() ?? "";
+                    const lines = stdoutBuffer.split("\n");
+                    stdoutBuffer = lines.pop() ?? "";
 
-                  for (const line of lines) {
-                    yield* processLine(line);
-                  }
-                }),
+                    for (const line of lines) {
+                      yield* processLine(line);
+                    }
+                  }),
+                ),
               ),
-              Stream.runForEach(child.stderr, (chunk) =>
-                Effect.gen(function* () {
-                  const errChunk = new TextDecoder().decode(chunk);
-                  stderrText += errChunk;
-                  yield* Effect.logWarning("antigravity.stderr.chunk", { text: errChunk });
-                }),
+              child.stderr.pipe(
+                Stream.decodeText(),
+                Stream.runForEach((errChunk) =>
+                  Effect.gen(function* () {
+                    stderrText += errChunk;
+                    yield* Effect.logWarning("antigravity.stderr.chunk", { text: errChunk });
+                  }),
+                ),
               ),
             ],
             { concurrency: "unbounded" },
@@ -583,23 +621,30 @@ export function makeAntigravityAdapter(
             agyConversationId: ctx.agyConversationId,
           });
 
-          if (exitCode !== 0 && stderrText.trim() && !fullText) {
-            const errMessage = stderrText.trim();
-            fullText = `Error: ${errMessage}`;
-            yield* emitEvent({
-              eventId: makeEventId("content.delta", input.threadId, turnId),
-              provider: PROVIDER,
-              providerInstanceId: instanceId,
-              threadId: input.threadId,
-              turnId,
-              itemId,
-              createdAt: new Date().toISOString(),
-              type: "content.delta",
-              payload: {
-                streamKind: "assistant_text",
-                delta: fullText,
-              },
-            });
+          let errorMessage: string | undefined;
+          if (exitCode !== 0) {
+            errorMessage =
+              stderrText.trim() ||
+              (fullText.startsWith("Error:")
+                ? fullText
+                : `Antigravity process exited with non-zero status (${exitCode}).`);
+            if (!fullText) {
+              fullText = `Error: ${errorMessage}`;
+              yield* emitEvent({
+                eventId: makeEventId("content.delta", input.threadId, turnId),
+                provider: PROVIDER,
+                providerInstanceId: instanceId,
+                threadId: input.threadId,
+                turnId,
+                itemId,
+                createdAt: new Date().toISOString(),
+                type: "content.delta",
+                payload: {
+                  streamKind: "assistant_text",
+                  delta: `\n\n**Error:** ${errorMessage}\n`,
+                },
+              });
+            }
           }
 
           ctx.turns.push({ id: turnId, items: [{ prompt: textPrompt, response: fullText }] });
@@ -631,6 +676,7 @@ export function makeAntigravityAdapter(
             type: "turn.completed",
             payload: {
               state: exitCode === 0 ? "completed" : "failed",
+              ...(errorMessage ? { errorMessage } : {}),
               ...(ctx.agyConversationId ? { providerThreadId: ctx.agyConversationId } : {}),
               ...(ctx.session.resumeCursor !== undefined
                 ? { resumeCursor: ctx.session.resumeCursor }
