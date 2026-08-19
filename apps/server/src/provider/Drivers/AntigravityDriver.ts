@@ -106,9 +106,13 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
         env: processEnv,
       });
 
+      const maybeLoggers = yield* Effect.serviceOption(ProviderEventLoggers);
+      const nativeLogger = maybeLoggers._tag === "Some" ? maybeLoggers.value.native : undefined;
+
       const adapter = yield* makeAntigravityAdapter(effectiveConfig, {
         environment: processEnv,
         instanceId,
+        nativeEventLogger: nativeLogger,
       });
       const textGeneration = yield* makeAntigravityTextGeneration(effectiveConfig, processEnv);
 

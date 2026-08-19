@@ -13,7 +13,11 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 
-import { makeAntigravityAdapter } from "./AntigravityAdapter.ts";
+import {
+  makeAntigravityAdapter,
+  mapAntigravityToolToCanonicalItemType,
+  getAntigravityToolDetail,
+} from "./AntigravityAdapter.ts";
 
 const decodeAntigravitySettings = Schema.decodeSync(AntigravitySettings);
 const PROVIDER = ProviderDriverKind.make("antigravity");
@@ -179,5 +183,28 @@ it.layer(testLayer)("AntigravityAdapter", (it) => {
         expect(result.threadId).toBe(threadId);
       }),
     ),
+  );
+
+  it.effect("correctly maps Antigravity tools to canonical item types and extracts details", () =>
+    Effect.gen(function* () {
+      const runCmd = mapAntigravityToolToCanonicalItemType("run_command");
+      expect(runCmd.itemType).toBe("command_execution");
+      expect(runCmd.title).toBe("Run command");
+
+      const writeCmd = mapAntigravityToolToCanonicalItemType("write_to_file");
+      expect(writeCmd.itemType).toBe("file_change");
+
+      const searchCmd = mapAntigravityToolToCanonicalItemType("search_web");
+      expect(searchCmd.itemType).toBe("web_search");
+
+      const subagentCmd = mapAntigravityToolToCanonicalItemType("invoke_subagent");
+      expect(subagentCmd.itemType).toBe("collab_agent_tool_call");
+
+      const detail = getAntigravityToolDetail({ CommandLine: "npm test" });
+      expect(detail).toBe("npm test");
+
+      const fileDetail = getAntigravityToolDetail({ TargetFile: "src/main.ts" });
+      expect(fileDetail).toBe("src/main.ts");
+    }),
   );
 });

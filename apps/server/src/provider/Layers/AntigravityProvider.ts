@@ -61,6 +61,18 @@ export const ANTIGRAVITY_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
     capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
   },
   {
+    slug: "gemini-2.5-pro",
+    name: "Gemini 2.5 Pro",
+    isCustom: false,
+    capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
+  },
+  {
+    slug: "gemini-2.0-flash",
+    name: "Gemini 2.0 Flash",
+    isCustom: false,
+    capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
+  },
+  {
     slug: "gemini-3.6-flash",
     name: "Gemini 3.6 Flash",
     isCustom: false,
@@ -111,13 +123,9 @@ function antigravityModelsFromSettings(
   customModels: ReadonlyArray<string> | undefined,
   builtInModels: ReadonlyArray<ServerProviderModel> = ANTIGRAVITY_BUILT_IN_MODELS,
 ): ReadonlyArray<ServerProviderModel> {
-  const sanitizedCustomModels = (customModels ?? []).filter((m) => {
-    const lower = m.toLowerCase();
-    return !lower.includes("pro") && !lower.includes("3.5");
-  });
   return providerModelsFromSettings(
     builtInModels,
-    sanitizedCustomModels,
+    customModels ?? [],
     ANTIGRAVITY_MODEL_CAPABILITIES,
   );
 }
