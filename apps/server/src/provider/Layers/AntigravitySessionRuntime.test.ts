@@ -251,7 +251,7 @@ describe("AntigravitySessionRuntime", () => {
           expect(usageEvents.length).toBeGreaterThan(0);
           expect(usageEvents[0].payload.usage.reasoningOutputTokens).toBe(15);
 
-          expect(capturedStdin).toContain("user_message");
+          expect(capturedStdin).toContain('"event":"user"');
           expect(capturedStdin).toContain("Hello Antigravity");
 
           expect(loggedEvents.length).toBeGreaterThan(0);
@@ -518,7 +518,7 @@ describe("AntigravitySessionRuntime", () => {
               yield* Effect.yieldNow;
             }
 
-            expect(capturedStdin).toContain("user_message");
+            expect(capturedStdin).toContain('"event":"user"');
             expect(capturedStdin).toContain("<developer_instructions>");
             expect(capturedStdin).toContain("<proposed_plan>");
             expect(capturedStdin).toContain("Plan Mode (Conversational)");

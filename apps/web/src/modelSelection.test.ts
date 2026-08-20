@@ -302,4 +302,44 @@ describe("instance-scoped model selection", () => {
       model: "openai/gpt-5.5",
     });
   });
+
+  it("filters out custom models from server snapshot if they are not in settings", () => {
+    const serverProvider: ServerProvider = {
+      instanceId: ProviderInstanceId.make("antigravity"),
+      driver: ProviderDriverKind.make("antigravity"),
+      enabled: true,
+      installed: true,
+      version: null,
+      status: "ready",
+      auth: { status: "unknown" },
+      checkedAt: "2026-01-01T00:00:00.000Z",
+      models: [
+        { slug: "gemini-3.7-flash", name: "Gemini 3.7 Flash", isCustom: false, capabilities: {} },
+        {
+          slug: "stale-custom-model",
+          name: "Stale Custom Model",
+          isCustom: true,
+          capabilities: {},
+        },
+      ],
+      slashCommands: [],
+      skills: [],
+    };
+    const settings: UnifiedSettings = {
+      ...DEFAULT_UNIFIED_SETTINGS,
+      providerInstances: {
+        [ProviderInstanceId.make("antigravity")]: {
+          driver: ProviderDriverKind.make("antigravity"),
+          config: { customModels: ["active-custom-model"] },
+        },
+      },
+    };
+    const [entry] = deriveProviderInstanceEntries([serverProvider]);
+    const options = getAppModelOptionsForInstance(settings, entry!);
+    const slugs = options.map((o) => o.slug);
+
+    expect(slugs).toContain("gemini-3.7-flash");
+    expect(slugs).toContain("active-custom-model");
+    expect(slugs).not.toContain("stale-custom-model");
+  });
 });

@@ -150,20 +150,24 @@ export function getAppModelOptions(
   provider: ProviderDriverKind,
   _selectedModel?: string | null,
 ): AppModelOption[] {
-  const options: AppModelOption[] = getProviderModels(providers, provider).map(toAppModelOption);
-  const seen = new Set(options.map((option) => option.slug));
-  const builtInModelSlugs = new Set(
-    Arr.filterMap(getProviderModels(providers, provider), (model) =>
-      model.isCustom ? Result.failVoid : Result.succeed(model.slug),
-    ),
-  );
-
   // Read from the default instance's config first (that's where edits
   // now land), falling back to the legacy per-kind bucket so unmigrated
   // settings and the initial render before the first write both still
   // see the user's authored custom models.
   const defaultInstanceId = defaultInstanceIdForDriver(provider);
   const customModels = readInstanceCustomModels(settings, defaultInstanceId, provider);
+  const customModelSet = new Set(normalizeCustomModelSlugs(customModels, new Set()));
+  const serverModels = getProviderModels(providers, provider);
+  const options: AppModelOption[] = serverModels
+    .filter((model) => !model.isCustom || customModelSet.has(model.slug))
+    .map(toAppModelOption);
+  const seen = new Set(options.map((option) => option.slug));
+  const builtInModelSlugs = new Set(
+    Arr.filterMap(serverModels, (model) =>
+      model.isCustom ? Result.failVoid : Result.succeed(model.slug),
+    ),
+  );
+
   for (const slug of normalizeCustomModelSlugs(customModels, builtInModelSlugs)) {
     if (seen.has(slug)) {
       continue;
@@ -198,7 +202,11 @@ export function getAppModelOptionsForInstance(
   settings: UnifiedSettings,
   entry: ProviderInstanceEntry,
 ): AppModelOption[] {
-  const options: AppModelOption[] = entry.models.map(toAppModelOption);
+  const customModels = readInstanceCustomModels(settings, entry.instanceId, entry.driverKind);
+  const customModelSet = new Set(normalizeCustomModelSlugs(customModels, new Set()));
+  const options: AppModelOption[] = entry.models
+    .filter((model) => !model.isCustom || customModelSet.has(model.slug))
+    .map(toAppModelOption);
   const seen = new Set(options.map((option) => option.slug));
   const builtInModelSlugs = new Set(
     Arr.filterMap(entry.models, (model) =>
@@ -206,7 +214,6 @@ export function getAppModelOptionsForInstance(
     ),
   );
 
-  const customModels = readInstanceCustomModels(settings, entry.instanceId, entry.driverKind);
   for (const slug of normalizeCustomModelSlugs(customModels, builtInModelSlugs)) {
     if (seen.has(slug)) {
       continue;

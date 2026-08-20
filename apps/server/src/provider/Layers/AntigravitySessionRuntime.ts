@@ -445,6 +445,8 @@ export const makeAntigravitySessionRuntime = (
     const agyConversationIdRef = yield* Ref.make<string | undefined>(initialConvId);
     const currentModelRef = yield* Ref.make<string>(requestedModel);
     const currentEffortRef = yield* Ref.make<string>(options.effort ?? "medium");
+    const spawnedModelRef = yield* Ref.make<string | undefined>(undefined);
+    const spawnedEffortRef = yield* Ref.make<string | undefined>(undefined);
     const activeTurnRef = yield* Ref.make<ActiveTurnState | undefined>(undefined);
     const closedRef = yield* Ref.make<boolean>(false);
     const stdinQueueRef = yield* Ref.make<Queue.Queue<Uint8Array> | undefined>(undefined);
@@ -1036,7 +1038,14 @@ export const makeAntigravitySessionRuntime = (
               }
 
               if (isError && activeTurn && !activeTurn.fullText && currentTurnId && currentItemId) {
-                activeTurn.fullText = `Error: ${errorMsg}`;
+                const isCanceledOrTimeout =
+                  errorMsg?.toLowerCase().includes("context canceled") ||
+                  errorMsg?.toLowerCase().includes("timed out") ||
+                  errorMsg?.toLowerCase().includes("timeout");
+                const errorDelta = isCanceledOrTimeout
+                  ? `\n\n> ⚠️ **Turn timed out (${errorMsg}).** File modifications and tool operations completed before the timeout were preserved on disk, but the final response summary was interrupted. You can ask what was done or continue the turn.\n`
+                  : `\n\n**Error:** ${errorMsg}\n`;
+                activeTurn.fullText = errorDelta.trim();
                 const eventId = yield* makeEventId("content.delta.error", currentTurnId);
                 const createdAt = yield* nowIso;
                 yield* offerEvent({
@@ -1050,7 +1059,7 @@ export const makeAntigravitySessionRuntime = (
                   type: "content.delta",
                   payload: {
                     streamKind: "assistant_text",
-                    delta: `\n\n**Error:** ${errorMsg}\n`,
+                    delta: errorDelta,
                   },
                 });
               } else if (
@@ -1254,6 +1263,8 @@ export const makeAntigravitySessionRuntime = (
       const agyConversationId = yield* Ref.get(agyConversationIdRef);
       const currentModel = yield* Ref.get(currentModelRef);
       const currentEffort = yield* Ref.get(currentEffortRef);
+      yield* Ref.set(spawnedModelRef, currentModel);
+      yield* Ref.set(spawnedEffortRef, currentEffort);
       const runtimeMode = options.runtimeMode;
       const skipPermissions =
         runtimeMode === "full-access" || runtimeMode === "auto" || !runtimeMode;
@@ -1301,6 +1312,12 @@ export const makeAntigravitySessionRuntime = (
 
         if (currentModel) {
           args.push("--model", currentModel, "--effort", currentEffort);
+        }
+
+        const hasCustomTimeout =
+          options.settings.launchArgs && options.settings.launchArgs.includes("--print-timeout");
+        if (!hasCustomTimeout) {
+          args.push("--print-timeout", "30m");
         }
 
         if (options.settings.launchArgs) {
@@ -1535,9 +1552,24 @@ export const makeAntigravitySessionRuntime = (
           );
         }
 
-        // Ensure process is alive; reconnect/respawn if needed (mid-session reconnect & recovery)
+        const selectedModel = input.model ?? (yield* Ref.get(currentModelRef));
+        const selectedEffort = input.effort ?? (yield* Ref.get(currentEffortRef));
+        yield* Ref.set(currentModelRef, selectedModel);
+        yield* Ref.set(currentEffortRef, selectedEffort);
+
+        // Ensure process is alive and matches selected model/effort; reconnect/respawn if needed
         const isRunning = yield* Ref.get(isProcessRunningRef);
-        if (!isRunning) {
+        const spawnedModel = yield* Ref.get(spawnedModelRef);
+        const spawnedEffort = yield* Ref.get(spawnedEffortRef);
+
+        if (isRunning && (spawnedModel !== selectedModel || spawnedEffort !== selectedEffort)) {
+          const stdinQueue = yield* Ref.get(stdinQueueRef);
+          if (stdinQueue) {
+            yield* Queue.shutdown(stdinQueue);
+          }
+          yield* Ref.set(isProcessRunningRef, false);
+          yield* spawnProcess();
+        } else if (!isRunning) {
           yield* spawnProcess();
         }
 
@@ -1570,11 +1602,6 @@ export const makeAntigravitySessionRuntime = (
         if (activeCwd && !textPrompt.includes("[Active Workspace Folder:")) {
           textPrompt = `[Active Workspace Folder: ${activeCwd}]\n\n${textPrompt}`;
         }
-
-        const selectedModel = input.model ?? (yield* Ref.get(currentModelRef));
-        const selectedEffort = input.effort ?? (yield* Ref.get(currentEffortRef));
-        yield* Ref.set(currentModelRef, selectedModel);
-        yield* Ref.set(currentEffortRef, selectedEffort);
 
         const currentMode = input.interactionMode ?? "default";
         const previousMode = yield* Ref.get(lastInteractionModeRef);
@@ -1635,14 +1662,9 @@ export const makeAntigravitySessionRuntime = (
 
         // Write turn message JSON to persistent daemon process stdin
         const turnMessageJson = JSON.stringify({
-          event: "user_message",
+          event: "user",
           message: {
-            prompt: textPrompt,
-            model: selectedModel,
-            effort: selectedEffort,
-            developer_instructions: developerInstructions,
-            ...(input.interactionMode ? { interaction_mode: input.interactionMode } : {}),
-            ...(imagePaths.length > 0 ? { image_paths: imagePaths } : {}),
+            content: textPrompt,
           },
         });
         yield* writeToStdin(turnMessageJson);

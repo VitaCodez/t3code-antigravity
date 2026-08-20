@@ -182,6 +182,45 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
     );
   });
 
+  it("does not resurrect deleted custom models from cache when not in fallback models", () => {
+    const cachedProvider = makeProvider(CODEX_DRIVER, {
+      models: [
+        {
+          slug: "deleted-custom-model",
+          name: "deleted-custom-model",
+          isCustom: true,
+          capabilities: emptyCapabilities,
+        },
+        {
+          slug: "dynamically-discovered-model",
+          name: "Dynamically Discovered Model",
+          isCustom: false,
+          capabilities: emptyCapabilities,
+        },
+      ],
+    });
+    const fallbackProvider = makeProvider(CODEX_DRIVER, {
+      models: [
+        {
+          slug: "gpt-5.4",
+          name: "GPT-5.4",
+          isCustom: false,
+          capabilities: emptyCapabilities,
+        },
+      ],
+    });
+
+    const hydrated = hydrateCachedProvider({
+      cachedProvider,
+      fallbackProvider,
+    });
+
+    assert.deepStrictEqual(
+      hydrated.models.map((m) => m.slug),
+      ["gpt-5.4", "dynamically-discovered-model"],
+    );
+  });
+
   it("ignores stale cached enabled state when the provider is now disabled", () => {
     const cachedCodex = makeProvider(CODEX_DRIVER, {
       checkedAt: "2026-04-10T12:00:00.000Z",
