@@ -79,18 +79,37 @@ const hasModelCapabilities = (model: ServerProvider["models"][number]): boolean 
   (model.capabilities?.optionDescriptors?.length ?? 0) > 0;
 
 const shouldRetainMissingProviderModels = (provider: ServerProvider): boolean => {
+  const didInstalledProviderProbeFail = provider.installed && provider.status === "error";
+
   // A provider's initial snapshot is deliberately non-authoritative while its
   // first probe is still running. A probe error from an installed CLI/server
   // is likewise partial: it could not establish the current inventory.
   // Conversely, disabled and missing-CLI snapshots are authoritative removals,
-  // as are successful ready/warning inventories (including an empty one after
-  // logout, plugin removal, or custom model deletion).
-  const isPendingInitialProbe =
-    provider.enabled &&
-    (provider.version === null || !provider.installed) &&
-    provider.status === "warning";
-  const didInstalledProviderProbeFail = provider.installed && provider.status === "error";
-  return isPendingInitialProbe || didInstalledProviderProbeFail;
+  // as are successful ready/warning inventories.
+  //
+  // Only drivers with a known-non-authoritative probe window get the
+  // pending-probe retention. Every other driver's snapshot is authoritative:
+  // models absent from it must be removed immediately, otherwise stale model
+  // lists survive logout/plugin removal/model deletion on providers this
+  // fork does not own.
+  if (provider.driver === ProviderDriverKind.make("antigravity")) {
+    // The Antigravity probe only checks CLI availability; its initial
+    // snapshot and custom-model sync rely on retention until the first
+    // successful inventory lands.
+    const isPendingInitialProbe =
+      provider.enabled &&
+      (provider.version === null || !provider.installed) &&
+      provider.status === "warning";
+    return isPendingInitialProbe || didInstalledProviderProbeFail;
+  }
+
+  if (provider.driver === ProviderDriverKind.make("opencode")) {
+    const isPendingInitialProbe =
+      provider.enabled && !provider.installed && provider.status === "warning";
+    return isPendingInitialProbe || didInstalledProviderProbeFail;
+  }
+
+  return true;
 };
 
 const mergeProviderModels = (

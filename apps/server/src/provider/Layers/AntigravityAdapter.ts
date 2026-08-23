@@ -32,6 +32,7 @@ import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
+import * as Result from "effect/Result";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
@@ -178,6 +179,13 @@ export function makeAntigravityAdapter(
         const rawEffort =
           typeof effortOption?.value === "string" ? effortOption.value.trim().toLowerCase() : "";
         const effortValue = ["low", "medium", "high"].includes(rawEffort) ? rawEffort : "medium";
+        const contextWindowOption = input.modelSelection?.options?.find(
+          (opt) => opt.id === "contextWindow",
+        );
+        const contextWindowValue =
+          typeof contextWindowOption?.value === "string"
+            ? contextWindowOption.value.trim().toLowerCase()
+            : undefined;
 
         const runtime = yield* runtimeFactory({
           threadId: input.threadId,
@@ -188,6 +196,7 @@ export function makeAntigravityAdapter(
           runtimeMode: input.runtimeMode ?? "full-access",
           model: requestedModel,
           effort: effortValue,
+          contextWindow: contextWindowValue,
           resumeCursor: resume,
           nativeEventLogger: nativeLogger,
         }).pipe(
@@ -205,13 +214,21 @@ export function makeAntigravityAdapter(
           ),
         );
 
-        const session = yield* runtime
-          .start()
-          .pipe(
-            Effect.mapError((cause) =>
-              mapAntigravityRuntimeError(input.threadId, "startSession", cause),
-            ),
-          );
+        const startResult = yield* runtime.start().pipe(
+          Effect.mapError((cause) =>
+            mapAntigravityRuntimeError(input.threadId, "startSession", cause),
+          ),
+          Effect.result,
+        );
+
+        if (Result.isFailure(startResult)) {
+          // The runtime owns its internal scope; without an explicit close a
+          // failed start would leak any fibers/queues it created.
+          yield* runtime.close.pipe(Effect.catchCause(() => Effect.void));
+          return yield* Effect.fail(startResult.failure);
+        }
+
+        const session = startResult.success;
 
         // Forward runtime events to adapter pubsub
         const eventFiber = yield* runtime.events.pipe(
@@ -282,6 +299,13 @@ export function makeAntigravityAdapter(
         const rawEffort =
           typeof effortOption?.value === "string" ? effortOption.value.trim().toLowerCase() : "";
         const effortValue = ["low", "medium", "high"].includes(rawEffort) ? rawEffort : undefined;
+        const contextWindowOption = input.modelSelection?.options?.find(
+          (opt) => opt.id === "contextWindow",
+        );
+        const contextWindowValue =
+          typeof contextWindowOption?.value === "string"
+            ? contextWindowOption.value.trim().toLowerCase()
+            : undefined;
 
         return yield* ctx.runtime
           .sendTurn({
@@ -289,6 +313,7 @@ export function makeAntigravityAdapter(
             attachments: mappedAttachments,
             model: input.modelSelection?.model,
             effort: effortValue,
+            contextWindow: contextWindowValue,
             interactionMode: input.interactionMode,
           })
           .pipe(

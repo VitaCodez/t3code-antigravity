@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Queue from "effect/Queue";
+import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import * as Sink from "effect/Sink";
@@ -17,6 +18,7 @@ import {
 import {
   makeAntigravitySessionRuntime,
   resolveAntigravitySpawnCommand,
+  resolveAntigravityContextLimit,
   classifyRequestType,
   mapAntigravityToolToCanonicalItemType,
   getAntigravityToolDetail,
@@ -27,6 +29,38 @@ import type { EventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const decodeAntigravitySettings = Schema.decodeSync(AntigravitySettings);
 const PROVIDER = ProviderDriverKind.make("antigravity");
+
+interface TrackableAntigravityProcess {
+  handle: ReturnType<typeof ChildProcessSpawner.makeHandle>;
+  stdoutQueue: Queue.Queue<Uint8Array>;
+  kills: Array<number>;
+}
+
+const ndjsonLine = (payload: unknown) => new TextEncoder().encode(JSON.stringify(payload) + "\n");
+
+const makeTrackableProcess = (pidNumber: number) =>
+  Effect.gen(function* () {
+    const stdoutQueue = yield* Queue.unbounded<Uint8Array>();
+    const kills: Array<number> = [];
+    const byteStream = Stream.empty;
+    const handle = ChildProcessSpawner.makeHandle({
+      pid: ChildProcessSpawner.ProcessId(pidNumber),
+      exitCode: Effect.never,
+      isRunning: Effect.succeed(false),
+      kill: () =>
+        Effect.sync(() => {
+          kills.push(kills.length + 1);
+        }),
+      stdout: Stream.fromQueue(stdoutQueue),
+      stderr: byteStream,
+      all: byteStream,
+      stdin: Sink.drain,
+      getInputFd: () => Sink.drain,
+      getOutputFd: () => byteStream,
+      unref: Effect.succeed(Effect.void),
+    });
+    return { handle, stdoutQueue, kills } satisfies TrackableAntigravityProcess;
+  });
 
 describe("AntigravitySessionRuntime", () => {
   it("resolves spawn command safely on Windows without shell: true", () => {
@@ -132,6 +166,8 @@ describe("AntigravitySessionRuntime", () => {
               ChildProcessSpawner.makeHandle({
                 pid: ChildProcessSpawner.ProcessId(4321),
                 exitCode: Effect.never,
+                isRunning: Effect.succeed(false),
+                kill: () => Effect.void,
                 stdout: Stream.fromQueue(stdoutQueue),
                 stderr: Stream.empty,
                 stdin: Sink.forEach((chunk: Uint8Array) =>
@@ -250,6 +286,9 @@ describe("AntigravitySessionRuntime", () => {
           const usageEvents = eventCollector.filter((e) => e.type === "thread.token-usage.updated");
           expect(usageEvents.length).toBeGreaterThan(0);
           expect(usageEvents[0].payload.usage.reasoningOutputTokens).toBe(15);
+          expect(usageEvents[0].payload.usage.maxTokens).toBe(1_048_576);
+          // compactsAutomatically is only reported when the CLI reports it.
+          expect(usageEvents[0].payload.usage.compactsAutomatically).toBeUndefined();
 
           expect(capturedStdin).toContain('"event":"user"');
           expect(capturedStdin).toContain("Hello Antigravity");
@@ -275,6 +314,8 @@ describe("AntigravitySessionRuntime", () => {
               ChildProcessSpawner.makeHandle({
                 pid: ChildProcessSpawner.ProcessId(4322),
                 exitCode: Effect.never,
+                isRunning: Effect.succeed(false),
+                kill: () => Effect.void,
                 stdout: Stream.fromQueue(stdoutQueue),
                 stderr: Stream.empty,
                 stdin: Sink.forEach((chunk: Uint8Array) =>
@@ -371,6 +412,8 @@ describe("AntigravitySessionRuntime", () => {
               ChildProcessSpawner.makeHandle({
                 pid: ChildProcessSpawner.ProcessId(4323),
                 exitCode: Effect.never,
+                isRunning: Effect.succeed(false),
+                kill: () => Effect.void,
                 stdout: Stream.fromQueue(stdoutQueue),
                 stderr: Stream.empty,
                 stdin: Sink.forEach((chunk: Uint8Array) =>
@@ -482,6 +525,8 @@ describe("AntigravitySessionRuntime", () => {
                 ChildProcessSpawner.makeHandle({
                   pid: ChildProcessSpawner.ProcessId(4324),
                   exitCode: Effect.never,
+                  isRunning: Effect.succeed(false),
+                  kill: () => Effect.void,
                   stdout: Stream.fromQueue(stdoutQueue),
                   stderr: Stream.empty,
                   stdin: Sink.forEach((chunk: Uint8Array) =>
@@ -544,6 +589,8 @@ describe("AntigravitySessionRuntime", () => {
                 ChildProcessSpawner.makeHandle({
                   pid: ChildProcessSpawner.ProcessId(4325),
                   exitCode: Effect.never,
+                  isRunning: Effect.succeed(false),
+                  kill: () => Effect.void,
                   stdout: Stream.fromQueue(stdoutQueue),
                   stderr: Stream.empty,
                   stdin: Sink.drain,
@@ -645,6 +692,8 @@ describe("AntigravitySessionRuntime", () => {
                 ChildProcessSpawner.makeHandle({
                   pid: ChildProcessSpawner.ProcessId(4326),
                   exitCode: Effect.never,
+                  isRunning: Effect.succeed(false),
+                  kill: () => Effect.void,
                   stdout: Stream.fromQueue(stdoutQueue),
                   stderr: Stream.empty,
                   stdin: Sink.forEach((chunk: Uint8Array) =>
@@ -718,4 +767,290 @@ describe("AntigravitySessionRuntime", () => {
         }),
       ),
   );
+
+  it.effect("fails fast when a second turn is sent while one is in flight", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const proc = yield* makeTrackableProcess(4400);
+        const mockSpawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => Effect.succeed(proc.handle)),
+        );
+        const testLayer = Layer.mergeAll(NodeServices.layer, mockSpawnerLayer);
+
+        yield* Effect.gen(function* () {
+          const settings = decodeAntigravitySettings({ enabled: true });
+          const threadId = ThreadId.make("thread-overlap-guard-1");
+
+          const runtime = yield* makeAntigravitySessionRuntime({
+            threadId,
+            settings,
+            cwd: process.cwd(),
+            runtimeMode: "full-access",
+          });
+
+          yield* runtime.start();
+          yield* runtime.sendTurn({ input: "first turn" });
+
+          const outcome = yield* runtime.sendTurn({ input: "second turn" }).pipe(Effect.result);
+          expect(Result.isFailure(outcome)).toBe(true);
+          if (Result.isFailure(outcome)) {
+            expect(String(outcome.failure.detail)).toContain("already in progress");
+          }
+
+          // The first turn can still complete normally afterwards.
+          yield* Queue.offer(
+            proc.stdoutQueue,
+            ndjsonLine({ event: "result", result: { status: "DONE" } }),
+          );
+          for (let i = 0; i < 5; i++) {
+            yield* Effect.yieldNow;
+          }
+          const nextOutcome = yield* runtime.sendTurn({ input: "third turn" }).pipe(Effect.result);
+          expect(Result.isSuccess(nextOutcome)).toBe(true);
+
+          yield* runtime.close;
+        }).pipe(Effect.provide(testLayer));
+      }),
+    ),
+  );
+
+  it.effect("kills the daemon on interrupt so late output cannot resurrect the turn", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const proc = yield* makeTrackableProcess(4401);
+        const mockSpawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => Effect.succeed(proc.handle)),
+        );
+        const testLayer = Layer.mergeAll(NodeServices.layer, mockSpawnerLayer);
+
+        yield* Effect.gen(function* () {
+          const settings = decodeAntigravitySettings({ enabled: true });
+          const threadId = ThreadId.make("thread-interrupt-kill-1");
+
+          const runtime = yield* makeAntigravitySessionRuntime({
+            threadId,
+            settings,
+            cwd: process.cwd(),
+            runtimeMode: "full-access",
+          });
+
+          yield* runtime.start();
+          yield* runtime.sendTurn({ input: "long running task" });
+          expect(proc.kills.length).toBe(0);
+
+          yield* runtime.interruptTurn();
+          expect(proc.kills.length).toBeGreaterThan(0);
+
+          yield* runtime.close;
+        }).pipe(Effect.provide(testLayer));
+      }),
+    ),
+  );
+
+  it.effect("respawns and kills the previous daemon when model/effort changes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const processes: TrackableAntigravityProcess[] = [];
+        let spawnIndex = 0;
+        const mockSpawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() =>
+            Effect.gen(function* () {
+              const proc = yield* makeTrackableProcess(4500 + spawnIndex);
+              spawnIndex += 1;
+              processes.push(proc);
+              return proc.handle;
+            }),
+          ),
+        );
+        const testLayer = Layer.mergeAll(NodeServices.layer, mockSpawnerLayer);
+
+        yield* Effect.gen(function* () {
+          const settings = decodeAntigravitySettings({ enabled: true });
+          const threadId = ThreadId.make("thread-respawn-model-change-1");
+
+          const runtime = yield* makeAntigravitySessionRuntime({
+            threadId,
+            settings,
+            cwd: process.cwd(),
+            runtimeMode: "full-access",
+          });
+
+          yield* runtime.start();
+          expect(processes.length).toBe(1);
+
+          // Same model/effort as the spawned daemon: no respawn.
+          yield* runtime.sendTurn({
+            input: "turn one",
+            model: "gemini-3.7-flash",
+            effort: "medium",
+          });
+          expect(processes.length).toBe(1);
+
+          // Model switch: old daemon killed, new daemon spawned.
+          const firstProcess = processes[0]!;
+          yield* Queue.offer(
+            firstProcess.stdoutQueue,
+            ndjsonLine({ event: "result", result: { status: "DONE" } }),
+          );
+          for (let i = 0; i < 5; i++) {
+            yield* Effect.yieldNow;
+          }
+          yield* runtime.sendTurn({
+            input: "turn two",
+            model: "gemini-2.5-pro",
+            effort: "high",
+          });
+          expect(processes.length).toBe(2);
+          expect(firstProcess.kills.length).toBeGreaterThan(0);
+
+          yield* runtime.close;
+        }).pipe(Effect.provide(testLayer));
+      }),
+    ),
+  );
+
+  it.effect("emits a single approval request for repeated PENDING_APPROVAL state updates", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const proc = yield* makeTrackableProcess(4402);
+        const mockSpawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => Effect.succeed(proc.handle)),
+        );
+        const testLayer = Layer.mergeAll(NodeServices.layer, mockSpawnerLayer);
+
+        yield* Effect.gen(function* () {
+          const settings = decodeAntigravitySettings({ enabled: true });
+          const threadId = ThreadId.make("thread-approval-dedupe-1");
+
+          const runtime = yield* makeAntigravitySessionRuntime({
+            threadId,
+            settings,
+            cwd: process.cwd(),
+            runtimeMode: "approval-required",
+          });
+          yield* runtime.start();
+
+          const eventCollector: Array<any> = [];
+          yield* Stream.runForEach(runtime.events, (event) =>
+            Effect.sync(() => {
+              eventCollector.push(event);
+            }),
+          ).pipe(Effect.forkScoped);
+
+          yield* runtime.sendTurn({ input: "run tests" });
+
+          const approvalLine = JSON.stringify({
+            event: "step_update",
+            step_update: {
+              step_type: "tool",
+              tool_name: "run_command",
+              state: "PENDING_APPROVAL",
+              tool_info: { parameters: { CommandLine: "npm test" } },
+            },
+          });
+          // The daemon re-emits the same pending state (e.g. a refresh).
+          yield* Queue.offer(proc.stdoutQueue, new TextEncoder().encode(approvalLine + "\n"));
+          yield* Queue.offer(proc.stdoutQueue, new TextEncoder().encode(approvalLine + "\n"));
+
+          for (let i = 0; i < 10; i++) {
+            yield* Effect.yieldNow;
+          }
+
+          const openedEvents = eventCollector.filter((e) => e.type === "request.opened");
+          expect(openedEvents.length).toBe(1);
+
+          yield* runtime.close;
+        }).pipe(Effect.provide(testLayer));
+      }),
+    ),
+  );
+
+  it.effect("does not leak non-JSON stdout lines into the assistant message", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const proc = yield* makeTrackableProcess(4403);
+        const mockSpawnerLayer = Layer.succeed(
+          ChildProcessSpawner.ChildProcessSpawner,
+          ChildProcessSpawner.make(() => Effect.succeed(proc.handle)),
+        );
+        const testLayer = Layer.mergeAll(NodeServices.layer, mockSpawnerLayer);
+
+        yield* Effect.gen(function* () {
+          const settings = decodeAntigravitySettings({ enabled: true });
+          const threadId = ThreadId.make("thread-noise-filter-1");
+
+          const runtime = yield* makeAntigravitySessionRuntime({
+            threadId,
+            settings,
+            cwd: process.cwd(),
+            runtimeMode: "full-access",
+          });
+          yield* runtime.start();
+
+          const eventCollector: Array<any> = [];
+          yield* Stream.runForEach(runtime.events, (event) =>
+            Effect.sync(() => {
+              eventCollector.push(event);
+            }),
+          ).pipe(Effect.forkScoped);
+
+          yield* runtime.sendTurn({ input: "hello" });
+
+          // Banner text and partial/multi-line JSON must never surface as
+          // assistant content.
+          yield* Queue.offer(
+            proc.stdoutQueue,
+            new TextEncoder().encode("Antigravity CLI v9.9.9 — starting up\n"),
+          );
+          yield* Queue.offer(proc.stdoutQueue, new TextEncoder().encode("{broken json...\n"));
+          yield* Queue.offer(
+            proc.stdoutQueue,
+            new TextEncoder().encode(
+              JSON.stringify({
+                event: "step_update",
+                step_update: { step_type: "agent_response", text_delta: "real response" },
+              }) + "\n",
+            ),
+          );
+
+          for (let i = 0; i < 10; i++) {
+            yield* Effect.yieldNow;
+          }
+
+          const textDeltas = eventCollector
+            .filter((e) => e.type === "content.delta" && e.payload?.streamKind === "assistant_text")
+            .map((e) => String(e.payload.delta));
+          expect(textDeltas.join("")).toContain("real response");
+          expect(textDeltas.join("")).not.toContain("starting up");
+          expect(textDeltas.join("")).not.toContain("broken json");
+
+          yield* runtime.close;
+        }).pipe(Effect.provide(testLayer));
+      }),
+    ),
+  );
+});
+
+describe("resolveAntigravityContextLimit", () => {
+  it("resolves explicit selected context window options", () => {
+    expect(resolveAntigravityContextLimit("gemini-3.7-flash", "200k")).toBe(200_000);
+    expect(resolveAntigravityContextLimit("gemini-3.7-flash", "1m")).toBe(1_048_576);
+    expect(resolveAntigravityContextLimit("gemini-2.5-pro", "2m")).toBe(2_097_152);
+  });
+
+  it("resolves model defaults when context window is not specified", () => {
+    expect(resolveAntigravityContextLimit("gemini-2.5-pro")).toBe(2_097_152);
+    expect(resolveAntigravityContextLimit("gemini-1.5-pro")).toBe(2_097_152);
+    expect(resolveAntigravityContextLimit("custom-pro-model")).toBe(2_097_152);
+    expect(resolveAntigravityContextLimit("gemini-3.7-flash")).toBe(1_048_576);
+    expect(resolveAntigravityContextLimit("gemini-2.0-flash")).toBe(1_048_576);
+    expect(resolveAntigravityContextLimit("gemini-3.6-flash")).toBe(1_048_576);
+    expect(resolveAntigravityContextLimit("claude-3-7-sonnet")).toBe(200_000);
+    expect(resolveAntigravityContextLimit("gpt-4o")).toBe(128_000);
+    expect(resolveAntigravityContextLimit(undefined)).toBe(1_048_576);
+  });
 });

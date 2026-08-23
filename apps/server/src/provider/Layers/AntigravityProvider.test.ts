@@ -43,6 +43,26 @@ describe("buildInitialAntigravityProviderSnapshot", () => {
       expect(modelSlugs).toContain("gemini-2.5-pro");
       expect(modelSlugs).toContain("gemini-2.0-flash");
       expect(modelSlugs).toContain("gemini-3.6-flash");
+
+      const flashModel = snapshot.models.find((m) => m.slug === "gemini-3.7-flash");
+      const flashContextWindow = flashModel?.capabilities.optionDescriptors?.find(
+        (d) => d.id === "contextWindow",
+      );
+      expect(flashContextWindow).toBeDefined();
+      if (flashContextWindow?.type === "select") {
+        expect(flashContextWindow.options.map((o) => o.id)).toEqual(["200k", "1m"]);
+        expect(flashContextWindow.currentValue).toBe("1m");
+      }
+
+      const proModel = snapshot.models.find((m) => m.slug === "gemini-2.5-pro");
+      const proContextWindow = proModel?.capabilities.optionDescriptors?.find(
+        (d) => d.id === "contextWindow",
+      );
+      expect(proContextWindow).toBeDefined();
+      if (proContextWindow?.type === "select") {
+        expect(proContextWindow.options.map((o) => o.id)).toEqual(["200k", "1m", "2m"]);
+        expect(proContextWindow.currentValue).toBe("2m");
+      }
     }),
   );
 });

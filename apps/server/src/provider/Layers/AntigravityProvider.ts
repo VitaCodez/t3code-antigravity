@@ -16,6 +16,8 @@ import { createModelCapabilities } from "@t3tools/shared/model";
 import { resolveAntigravitySpawnCommand } from "./AntigravityAdapter.ts";
 
 import {
+  buildBooleanOptionDescriptor,
+  buildSelectOptionDescriptor,
   buildServerProvider,
   isCommandMissingCause,
   parseGenericCliVersion,
@@ -35,21 +37,53 @@ const ANTIGRAVITY_PRESENTATION = {
   requiresNewThreadForModelChange: false,
 } as const;
 
-const ANTIGRAVITY_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
+export const ANTIGRAVITY_FLASH_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
   optionDescriptors: [
-    {
+    buildSelectOptionDescriptor({
       id: "effort",
       label: "Reasoning Effort",
-      type: "select",
       options: [
-        { id: "low", label: "Low" },
-        { id: "medium", label: "Medium", isDefault: true },
-        { id: "high", label: "High" },
+        { value: "low", label: "Low" },
+        { value: "medium", label: "Medium", isDefault: true },
+        { value: "high", label: "High" },
       ],
-      currentValue: "medium",
-    },
+    }),
+    buildSelectOptionDescriptor({
+      id: "contextWindow",
+      label: "Context Window",
+      options: [
+        { value: "200k", label: "200k" },
+        { value: "1m", label: "1M", isDefault: true },
+      ],
+    }),
   ],
 });
+
+export const ANTIGRAVITY_PRO_MODEL_CAPABILITIES: ModelCapabilities = createModelCapabilities({
+  optionDescriptors: [
+    buildSelectOptionDescriptor({
+      id: "effort",
+      label: "Reasoning Effort",
+      options: [
+        { value: "low", label: "Low" },
+        { value: "medium", label: "Medium", isDefault: true },
+        { value: "high", label: "High" },
+      ],
+    }),
+    buildSelectOptionDescriptor({
+      id: "contextWindow",
+      label: "Context Window",
+      options: [
+        { value: "200k", label: "200k" },
+        { value: "1m", label: "1M" },
+        { value: "2m", label: "2M", isDefault: true },
+      ],
+    }),
+  ],
+});
+
+export const ANTIGRAVITY_MODEL_CAPABILITIES: ModelCapabilities =
+  ANTIGRAVITY_FLASH_MODEL_CAPABILITIES;
 
 const VERSION_PROBE_TIMEOUT_MS = 4_000;
 
@@ -58,25 +92,25 @@ export const ANTIGRAVITY_BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
     slug: "gemini-3.7-flash",
     name: "Gemini 3.7 Flash",
     isCustom: false,
-    capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
+    capabilities: ANTIGRAVITY_FLASH_MODEL_CAPABILITIES,
   },
   {
     slug: "gemini-2.5-pro",
     name: "Gemini 2.5 Pro",
     isCustom: false,
-    capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
+    capabilities: ANTIGRAVITY_PRO_MODEL_CAPABILITIES,
   },
   {
     slug: "gemini-2.0-flash",
     name: "Gemini 2.0 Flash",
     isCustom: false,
-    capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
+    capabilities: ANTIGRAVITY_FLASH_MODEL_CAPABILITIES,
   },
   {
     slug: "gemini-3.6-flash",
     name: "Gemini 3.6 Flash",
     isCustom: false,
-    capabilities: ANTIGRAVITY_MODEL_CAPABILITIES,
+    capabilities: ANTIGRAVITY_FLASH_MODEL_CAPABILITIES,
   },
 ];
 

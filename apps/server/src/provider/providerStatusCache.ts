@@ -21,6 +21,9 @@ const mergeProviderModels = (
   cachedModels: ReadonlyArray<ServerProvider["models"][number]>,
 ): ReadonlyArray<ServerProvider["models"][number]> => {
   const fallbackSlugs = new Set(fallbackModels.map((model) => model.slug));
+  // Cached custom models never resurrect through hydration: custom models are
+  // settings-owned for every driver in this build, so a settings deletion must
+  // win over the cache even before the next successful probe lands.
   return [
     ...fallbackModels,
     ...cachedModels.filter((model) => !model.isCustom && !fallbackSlugs.has(model.slug)),

@@ -40,7 +40,8 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
   const runAntigravityCli = (
     prompt: string,
     cwd: string,
-    model?: string,
+    model: string | undefined,
+    operation: string,
   ): Effect.Effect<string, TextGenerationError> =>
     Effect.gen(function* () {
       const binary = settings.binaryPath || "agy";
@@ -69,7 +70,7 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
           Effect.mapError(
             (cause) =>
               new TextGenerationError({
-                operation: "generateCommitMessage",
+                operation,
                 detail: `Failed to spawn Antigravity CLI: ${cause}`,
                 cause,
               }),
@@ -90,7 +91,7 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
       if (exitCode !== 0) {
         return yield* Effect.fail(
           new TextGenerationError({
-            operation: "generateCommitMessage",
+            operation,
             detail: `Antigravity CLI exited with code ${exitCode}`,
           }),
         );
@@ -114,6 +115,7 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
         prompt,
         input.cwd,
         input.modelSelection?.model,
+        "generateCommitMessage",
       ).pipe(Effect.option);
 
       if (cliResult._tag === "Some" && cliResult.value) {
@@ -150,6 +152,7 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
         prompt,
         input.cwd,
         input.modelSelection?.model,
+        "generatePrContent",
       ).pipe(Effect.option);
 
       if (cliResult._tag === "Some" && cliResult.value) {
@@ -177,6 +180,7 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
         prompt,
         input.cwd,
         input.modelSelection?.model,
+        "generateBranchName",
       ).pipe(Effect.option);
 
       if (cliResult._tag === "Some" && cliResult.value) {
@@ -202,6 +206,7 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
         prompt,
         input.cwd,
         input.modelSelection?.model,
+        "generateThreadTitle",
       ).pipe(Effect.option);
 
       if (cliResult._tag === "Some" && cliResult.value) {

@@ -21,11 +21,24 @@ export function shouldShowThreadErrorBanner(
 // is remembered per thread key plus message, so navigating away to a thread
 // with no error cannot resurrect the banner, while a different error message
 // on the same thread still appears.
+const MAX_SESSION_DISMISSED_BANNERS = 500;
 const sessionDismissedThreadErrorBannerKeys = new Set<string>();
 
 export function dismissThreadErrorBannerForSession(bannerKey: string | null): void {
-  if (bannerKey !== null) {
-    sessionDismissedThreadErrorBannerKeys.add(bannerKey);
+  if (bannerKey === null) {
+    return;
+  }
+  if (sessionDismissedThreadErrorBannerKeys.has(bannerKey)) {
+    return;
+  }
+  sessionDismissedThreadErrorBannerKeys.add(bannerKey);
+  // Long-lived sessions can accumulate dismissals across many threads; evict
+  // the oldest entry (insertion order) to keep the set bounded.
+  if (sessionDismissedThreadErrorBannerKeys.size > MAX_SESSION_DISMISSED_BANNERS) {
+    const oldest = sessionDismissedThreadErrorBannerKeys.values().next().value;
+    if (oldest !== undefined) {
+      sessionDismissedThreadErrorBannerKeys.delete(oldest);
+    }
   }
 }
 
