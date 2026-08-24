@@ -33,6 +33,7 @@ import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
@@ -75,6 +76,8 @@ export {
 
 const PROVIDER = ProviderDriverKind.make("antigravity");
 
+const isProviderAdapterSessionNotFoundError = Schema.is(ProviderAdapterSessionNotFoundError);
+
 export interface AntigravityAdapterLiveOptions {
   readonly environment?: NodeJS.ProcessEnv;
   readonly instanceId?: ProviderInstanceId;
@@ -101,7 +104,7 @@ function mapAntigravityRuntimeError(
   method: string,
   error: unknown,
 ): ProviderAdapterError {
-  if (error instanceof ProviderAdapterSessionNotFoundError) {
+  if (isProviderAdapterSessionNotFoundError(error)) {
     return error;
   }
   const detail =
@@ -152,19 +155,15 @@ export function makeAntigravityAdapter(
         const sessions = yield* Ref.get(sessionsRef);
         const ctx = sessions.get(threadId);
         if (!ctx || ctx.stopped) {
-          return yield* Effect.fail(
-            new ProviderAdapterSessionNotFoundError({
-              provider: PROVIDER,
-              threadId,
-            }),
-          );
+          return yield* new ProviderAdapterSessionNotFoundError({
+            provider: PROVIDER,
+            threadId,
+          });
         }
         return ctx;
       });
 
-    const startSession = (
-      input: ProviderSessionStartInput,
-    ): Effect.Effect<ProviderSession, ProviderAdapterProcessError | ProviderAdapterRequestError> =>
+    const startSession: AntigravityAdapterShape["startSession"] = (input) =>
       Effect.gen(function* () {
         const existingSessions = yield* Ref.get(sessionsRef);
         const existing = existingSessions.get(input.threadId);
@@ -192,13 +191,13 @@ export function makeAntigravityAdapter(
           providerInstanceId: instanceId,
           settings,
           environment: processEnv,
-          cwd: input.cwd,
+          cwd: input.cwd ?? process.cwd(),
           runtimeMode: input.runtimeMode ?? "full-access",
           model: requestedModel,
           effort: effortValue,
-          contextWindow: contextWindowValue,
-          resumeCursor: resume,
-          nativeEventLogger: nativeLogger,
+          ...(contextWindowValue !== undefined ? { contextWindow: contextWindowValue } : {}),
+          ...(resume !== undefined ? { resumeCursor: resume } : {}),
+          ...(nativeLogger ? { nativeEventLogger: nativeLogger } : {}),
         }).pipe(
           Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
           Effect.provideService(Crypto.Crypto, crypto),
@@ -225,7 +224,7 @@ export function makeAntigravityAdapter(
           // The runtime owns its internal scope; without an explicit close a
           // failed start would leak any fibers/queues it created.
           yield* runtime.close.pipe(Effect.catchCause(() => Effect.void));
-          return yield* Effect.fail(startResult.failure);
+          return yield* startResult.failure;
         }
 
         const session = startResult.success;
@@ -252,12 +251,7 @@ export function makeAntigravityAdapter(
         return session;
       });
 
-    const sendTurn = (
-      input: ProviderSendTurnInput,
-    ): Effect.Effect<
-      ProviderTurnStartResult,
-      ProviderAdapterSessionNotFoundError | ProviderAdapterRequestError
-    > =>
+    const sendTurn: AntigravityAdapterShape["sendTurn"] = (input) =>
       Effect.gen(function* () {
         const ctx = yield* getSessionContext(input.threadId);
 
@@ -269,29 +263,17 @@ export function makeAntigravityAdapter(
 
         if (input.attachments && input.attachments.length > 0) {
           for (const att of input.attachments) {
-            if (att.type === "file") {
-              const filePath =
-                att.path ??
-                resolveAttachmentPath({
-                  attachmentsDir,
-                  attachment: att,
-                });
-              mappedAttachments.push({
-                type: "file",
-                path: filePath,
-                name: att.name,
-              });
-            } else if (att.type === "image") {
-              const imgPath = resolveAttachmentPath({
-                attachmentsDir,
-                attachment: att,
-              });
-              mappedAttachments.push({
-                type: "image",
-                path: imgPath,
-                name: att.name,
-              });
-            }
+            if (att.type !== "image") continue;
+            const imgPath = resolveAttachmentPath({
+              attachmentsDir,
+              attachment: att,
+            });
+            if (!imgPath) continue;
+            mappedAttachments.push({
+              type: "image",
+              path: imgPath,
+              name: att.name,
+            });
           }
         }
 
@@ -309,12 +291,16 @@ export function makeAntigravityAdapter(
 
         return yield* ctx.runtime
           .sendTurn({
-            input: typeof input.input === "string" ? input.input : undefined,
-            attachments: mappedAttachments,
-            model: input.modelSelection?.model,
-            effort: effortValue,
-            contextWindow: contextWindowValue,
-            interactionMode: input.interactionMode,
+            ...(typeof input.input === "string" ? { input: input.input } : {}),
+            ...(mappedAttachments.length > 0 ? { attachments: mappedAttachments } : {}),
+            ...(input.modelSelection?.model !== undefined
+              ? { model: input.modelSelection.model }
+              : {}),
+            ...(effortValue !== undefined ? { effort: effortValue } : {}),
+            ...(contextWindowValue !== undefined ? { contextWindow: contextWindowValue } : {}),
+            ...(input.interactionMode !== undefined
+              ? { interactionMode: input.interactionMode }
+              : {}),
           })
           .pipe(
             Effect.mapError((cause) =>
@@ -323,10 +309,7 @@ export function makeAntigravityAdapter(
           );
       });
 
-    const interruptTurn = (
-      threadId: ThreadId,
-      turnId?: TurnId,
-    ): Effect.Effect<void, ProviderAdapterSessionNotFoundError | ProviderAdapterRequestError> =>
+    const interruptTurn: AntigravityAdapterShape["interruptTurn"] = (threadId, turnId) =>
       Effect.gen(function* () {
         const ctx = yield* getSessionContext(threadId);
         yield* ctx.runtime
@@ -338,11 +321,11 @@ export function makeAntigravityAdapter(
           );
       });
 
-    const respondToRequest = (
-      threadId: ThreadId,
-      requestId: ApprovalRequestId,
-      decision: ProviderApprovalDecision,
-    ): Effect.Effect<void, ProviderAdapterRequestError> =>
+    const respondToRequest: AntigravityAdapterShape["respondToRequest"] = (
+      threadId,
+      requestId,
+      decision,
+    ) =>
       Effect.gen(function* () {
         const ctx = yield* getSessionContext(threadId).pipe(
           Effect.mapError((err) => mapAntigravityRuntimeError(threadId, "respondToRequest", err)),
@@ -356,11 +339,11 @@ export function makeAntigravityAdapter(
           );
       });
 
-    const respondToUserInput = (
-      threadId: ThreadId,
-      requestId: ApprovalRequestId,
-      answers: ProviderUserInputAnswers,
-    ): Effect.Effect<void, ProviderAdapterRequestError> =>
+    const respondToUserInput: AntigravityAdapterShape["respondToUserInput"] = (
+      threadId,
+      requestId,
+      answers,
+    ) =>
       Effect.gen(function* () {
         const ctx = yield* getSessionContext(threadId).pipe(
           Effect.mapError((err) => mapAntigravityRuntimeError(threadId, "respondToUserInput", err)),
@@ -381,12 +364,10 @@ export function makeAntigravityAdapter(
         const sessions = yield* Ref.get(sessionsRef);
         const ctx = sessions.get(threadId);
         if (!ctx) {
-          return yield* Effect.fail(
-            new ProviderAdapterSessionNotFoundError({
-              provider: PROVIDER,
-              threadId,
-            }),
-          );
+          return yield* new ProviderAdapterSessionNotFoundError({
+            provider: PROVIDER,
+            threadId,
+          });
         }
 
         ctx.stopped = true;
@@ -428,12 +409,7 @@ export function makeAntigravityAdapter(
         return ctx !== undefined && !ctx.stopped;
       });
 
-    const readThread = (
-      threadId: ThreadId,
-    ): Effect.Effect<
-      { threadId: ThreadId; turns: ReadonlyArray<{ id: TurnId; items: ReadonlyArray<unknown> }> },
-      ProviderAdapterSessionNotFoundError | ProviderAdapterRequestError
-    > =>
+    const readThread: AntigravityAdapterShape["readThread"] = (threadId) =>
       Effect.gen(function* () {
         const ctx = yield* getSessionContext(threadId);
         return yield* ctx.runtime.readThread.pipe(
@@ -441,13 +417,7 @@ export function makeAntigravityAdapter(
         );
       });
 
-    const rollbackThread = (
-      threadId: ThreadId,
-      numTurns: number,
-    ): Effect.Effect<
-      { threadId: ThreadId; turns: ReadonlyArray<{ id: TurnId; items: ReadonlyArray<unknown> }> },
-      ProviderAdapterSessionNotFoundError | ProviderAdapterRequestError
-    > =>
+    const rollbackThread: AntigravityAdapterShape["rollbackThread"] = (threadId, numTurns) =>
       Effect.gen(function* () {
         const ctx = yield* getSessionContext(threadId);
         return yield* ctx.runtime

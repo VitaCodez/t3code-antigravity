@@ -96,6 +96,8 @@ import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore"
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useHandleNewConversation } from "../hooks/useHandleNewConversation";
+import { isConversationsProject } from "../conversations";
 import { openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
@@ -1633,6 +1635,7 @@ export default function Sidebar() {
   });
   const [projectScopeMenuOpen, setProjectScopeMenuOpen] = useState(false);
   const newThreadContext = useHandleNewThread();
+  const handleNewConversation = useHandleNewConversation();
   const openAddProjectCommandPalette = useCallback(
     () => openCommandPalette({ open: "add-project" }),
     [],
@@ -1694,7 +1697,11 @@ export default function Sidebar() {
   const unsortedProjectGroups = useMemo(
     () =>
       buildSidebarProjectSnapshots({
-        projects: sidebarProjectSortOrder === "manual" ? orderedProjects : projects,
+        // The Conversations pseudo-project is rendered by its own shelf, not
+        // as a scoped project row.
+        projects: (sidebarProjectSortOrder === "manual" ? orderedProjects : projects).filter(
+          (project) => !isConversationsProject(project),
+        ),
         settings: projectGroupingSettings,
         primaryEnvironmentId,
         resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
@@ -1707,6 +1714,15 @@ export default function Sidebar() {
       projects,
       sidebarProjectSortOrder,
     ],
+  );
+  const conversationProjectKeys = useMemo(
+    () =>
+      new Set(
+        projects
+          .filter((project) => isConversationsProject(project))
+          .map((project) => `${project.environmentId}:${project.id}`),
+      ),
+    [projects],
   );
   const projectGroups = useMemo(
     () => sortLogicalProjectsForSidebar(unsortedProjectGroups, threads, sidebarProjectSortOrder),
@@ -1879,6 +1895,7 @@ export default function Sidebar() {
     const visible = threads.filter(
       (thread) =>
         thread.archivedAt === null &&
+        !conversationProjectKeys.has(`${thread.environmentId}:${thread.projectId}`) &&
         (scopedProjectKeys === null ||
           scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
     );
@@ -1949,12 +1966,24 @@ export default function Sidebar() {
   }, [
     autoSettleAfterDays,
     changeRequestStateByKey,
+    conversationProjectKeys,
     nowMinute,
     scopedProjectKeys,
     serverConfigs,
     snoozeWakeTick,
     threads,
   ]);
+
+  const conversationThreads = useMemo(() => {
+    const visible = threads.filter(
+      (thread) =>
+        thread.archivedAt === null &&
+        conversationProjectKeys.has(`${thread.environmentId}:${thread.projectId}`) &&
+        (scopedProjectKeys === null ||
+          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
+    );
+    return sortThreadsForSidebar(visible);
+  }, [conversationProjectKeys, scopedProjectKeys, threads]);
 
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
@@ -3568,6 +3597,42 @@ export default function Sidebar() {
                   for (const thread of activeThreads) {
                     items.push(renderThreadRow(thread, "active"));
                   }
+                  // Conversations shelf: lightweight chats live outside the
+                  // work inbox. The header stays put so a new conversation is
+                  // always one click away; rows render as normal cards.
+                  items.push(
+                    <li
+                      key="conversations-shelf-header"
+                      data-thread-selection-safe
+                      className="list-none"
+                    >
+                      <div className="mb-1 mt-3 flex w-full items-center gap-2 px-2.5">
+                        <span className="text-xs font-medium text-muted-foreground/50">
+                          Conversations
+                        </span>
+                        <span className="h-px flex-1 bg-sidebar-border/60" />
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <button
+                                type="button"
+                                aria-label="New conversation"
+                                data-testid="sidebar-add-conversation-trigger"
+                                onClick={handleNewConversation}
+                                className="inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-icon-muted transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                              />
+                            }
+                          >
+                            <PlusIcon className="size-3.5" />
+                          </TooltipTrigger>
+                          <TooltipPopup side="right">New conversation</TooltipPopup>
+                        </Tooltip>
+                      </div>
+                    </li>,
+                  );
+                  for (const thread of conversationThreads) {
+                    items.push(renderThreadRow(thread, "active"));
+                  }
                   // Snoozed shelf: between the inbox and Settled — out of the
                   // way, never gone. The header always renders while anything
                   // is snoozed (the count is the whole footprint when
@@ -3663,7 +3728,8 @@ export default function Sidebar() {
           pinnedThreads.length +
             activeThreads.length +
             snoozedThreads.length +
-            settledThreads.length ===
+            settledThreads.length +
+            conversationThreads.length ===
             0 ? (
             <div className="flex flex-col items-center gap-2 px-2 py-6 text-center text-xs text-muted-foreground/60">
               {projects.length === 0 ? (

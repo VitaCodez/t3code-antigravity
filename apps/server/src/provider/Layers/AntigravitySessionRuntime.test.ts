@@ -168,8 +168,12 @@ describe("AntigravitySessionRuntime", () => {
                 exitCode: Effect.never,
                 isRunning: Effect.succeed(false),
                 kill: () => Effect.void,
+                unref: Effect.succeed(Effect.void),
                 stdout: Stream.fromQueue(stdoutQueue),
                 stderr: Stream.empty,
+                all: Stream.empty,
+                getInputFd: () => Sink.drain,
+                getOutputFd: () => Stream.empty,
                 stdin: Sink.forEach((chunk: Uint8Array) =>
                   Effect.sync(() => {
                     capturedStdin += new TextDecoder().decode(chunk);
@@ -208,9 +212,7 @@ describe("AntigravitySessionRuntime", () => {
           // Push init event
           yield* Queue.offer(
             stdoutQueue,
-            new TextEncoder().encode(
-              JSON.stringify({ event: "init", conversation_id: "conv-123" }) + "\n",
-            ),
+            ndjsonLine({ event: "init", conversation_id: "conv-123" }),
           );
 
           const turnResult = yield* runtime.sendTurn({
@@ -223,48 +225,42 @@ describe("AntigravitySessionRuntime", () => {
           // Push thought and response events
           yield* Queue.offer(
             stdoutQueue,
-            new TextEncoder().encode(
-              JSON.stringify({
-                event: "step_update",
-                step_update: {
-                  step_type: "thought",
-                  thought_delta: "Thinking about the task...",
-                  usage: { input_tokens: 10, output_tokens: 5, thinking_tokens: 15 },
-                },
-              }) + "\n",
-            ),
+            ndjsonLine({
+              event: "step_update",
+              step_update: {
+                step_type: "thought",
+                thought_delta: "Thinking about the task...",
+                usage: { input_tokens: 10, output_tokens: 5, thinking_tokens: 15 },
+              },
+            }),
           );
 
           yield* Queue.offer(
             stdoutQueue,
-            new TextEncoder().encode(
-              JSON.stringify({
-                event: "step_update",
-                step_update: {
-                  step_type: "agent_response",
-                  text_delta: "Here is the response.",
-                },
-              }) + "\n",
-            ),
+            ndjsonLine({
+              event: "step_update",
+              step_update: {
+                step_type: "agent_response",
+                text_delta: "Here is the response.",
+              },
+            }),
           );
 
           yield* Queue.offer(
             stdoutQueue,
-            new TextEncoder().encode(
-              JSON.stringify({
-                event: "result",
-                result: {
-                  status: "DONE",
-                  conversation_id: "conv-123",
-                  usage: {
-                    total_tokens: 30,
-                    input_tokens: 10,
-                    output_tokens: 5,
-                    thinking_tokens: 15,
-                  },
+            ndjsonLine({
+              event: "result",
+              result: {
+                status: "DONE",
+                conversation_id: "conv-123",
+                usage: {
+                  total_tokens: 30,
+                  input_tokens: 10,
+                  output_tokens: 5,
+                  thinking_tokens: 15,
                 },
-              }) + "\n",
-            ),
+              },
+            }),
           );
 
           for (let i = 0; i < 5; i++) {
@@ -316,8 +312,12 @@ describe("AntigravitySessionRuntime", () => {
                 exitCode: Effect.never,
                 isRunning: Effect.succeed(false),
                 kill: () => Effect.void,
+                unref: Effect.succeed(Effect.void),
                 stdout: Stream.fromQueue(stdoutQueue),
                 stderr: Stream.empty,
+                all: Stream.empty,
+                getInputFd: () => Sink.drain,
+                getOutputFd: () => Stream.empty,
                 stdin: Sink.forEach((chunk: Uint8Array) =>
                   Effect.sync(() => {
                     capturedStdin += new TextDecoder().decode(chunk);
@@ -357,17 +357,15 @@ describe("AntigravitySessionRuntime", () => {
           // Push approval request
           yield* Queue.offer(
             stdoutQueue,
-            new TextEncoder().encode(
-              JSON.stringify({
-                event: "step_update",
-                step_update: {
-                  step_type: "tool",
-                  tool_name: "run_command",
-                  state: "PENDING_APPROVAL",
-                  tool_info: { parameters: { CommandLine: "npm test" } },
-                },
-              }) + "\n",
-            ),
+            ndjsonLine({
+              event: "step_update",
+              step_update: {
+                step_type: "tool",
+                tool_name: "run_command",
+                state: "PENDING_APPROVAL",
+                tool_info: { parameters: { CommandLine: "npm test" } },
+              },
+            }),
           );
 
           for (let i = 0; i < 5; i++) {
@@ -414,8 +412,12 @@ describe("AntigravitySessionRuntime", () => {
                 exitCode: Effect.never,
                 isRunning: Effect.succeed(false),
                 kill: () => Effect.void,
+                unref: Effect.succeed(Effect.void),
                 stdout: Stream.fromQueue(stdoutQueue),
                 stderr: Stream.empty,
+                all: Stream.empty,
+                getInputFd: () => Sink.drain,
+                getOutputFd: () => Stream.empty,
                 stdin: Sink.forEach((chunk: Uint8Array) =>
                   Effect.sync(() => {
                     capturedStdin += new TextDecoder().decode(chunk);
@@ -455,26 +457,24 @@ describe("AntigravitySessionRuntime", () => {
           // Push ask_question tool event without explicit question id
           yield* Queue.offer(
             stdoutQueue,
-            new TextEncoder().encode(
-              JSON.stringify({
-                event: "step_update",
-                step_update: {
-                  step_type: "tool",
-                  tool_name: "ask_question",
-                  state: "ACTIVE",
-                  tool_info: {
-                    parameters: {
-                      questions: [
-                        {
-                          question: "Which database would you prefer?",
-                          options: ["PostgreSQL", "SQLite"],
-                        },
-                      ],
-                    },
+            ndjsonLine({
+              event: "step_update",
+              step_update: {
+                step_type: "tool",
+                tool_name: "ask_question",
+                state: "ACTIVE",
+                tool_info: {
+                  parameters: {
+                    questions: [
+                      {
+                        question: "Which database would you prefer?",
+                        options: ["PostgreSQL", "SQLite"],
+                      },
+                    ],
                   },
                 },
-              }) + "\n",
-            ),
+              },
+            }),
           );
 
           for (let i = 0; i < 5; i++) {
@@ -527,8 +527,12 @@ describe("AntigravitySessionRuntime", () => {
                   exitCode: Effect.never,
                   isRunning: Effect.succeed(false),
                   kill: () => Effect.void,
+                  unref: Effect.succeed(Effect.void),
                   stdout: Stream.fromQueue(stdoutQueue),
                   stderr: Stream.empty,
+                  all: Stream.empty,
+                  getInputFd: () => Sink.drain,
+                  getOutputFd: () => Stream.empty,
                   stdin: Sink.forEach((chunk: Uint8Array) =>
                     Effect.sync(() => {
                       capturedStdin += new TextDecoder().decode(chunk);
@@ -591,8 +595,12 @@ describe("AntigravitySessionRuntime", () => {
                   exitCode: Effect.never,
                   isRunning: Effect.succeed(false),
                   kill: () => Effect.void,
+                  unref: Effect.succeed(Effect.void),
                   stdout: Stream.fromQueue(stdoutQueue),
                   stderr: Stream.empty,
+                  all: Stream.empty,
+                  getInputFd: () => Sink.drain,
+                  getOutputFd: () => Stream.empty,
                   stdin: Sink.drain,
                 }),
               ),
@@ -630,27 +638,23 @@ describe("AntigravitySessionRuntime", () => {
             const planMarkdown = `# Authentication Spec\n\n1. Use OAuth\n2. Add JWT sessions`;
             yield* Queue.offer(
               stdoutQueue,
-              new TextEncoder().encode(
-                JSON.stringify({
-                  event: "step_update",
-                  step_update: {
-                    step_type: "agent_response",
-                    text_delta: `Here is the plan:\n\n<proposed_plan>\n${planMarkdown}\n</proposed_plan>`,
-                  },
-                }) + "\n",
-              ),
+              ndjsonLine({
+                event: "step_update",
+                step_update: {
+                  step_type: "agent_response",
+                  text_delta: `Here is the plan:\n\n<proposed_plan>\n${planMarkdown}\n</proposed_plan>`,
+                },
+              }),
             );
 
             yield* Queue.offer(
               stdoutQueue,
-              new TextEncoder().encode(
-                JSON.stringify({
-                  event: "result",
-                  result: {
-                    status: "DONE",
-                  },
-                }) + "\n",
-              ),
+              ndjsonLine({
+                event: "result",
+                result: {
+                  status: "DONE",
+                },
+              }),
             );
 
             for (let i = 0; i < 5; i++) {
@@ -694,8 +698,12 @@ describe("AntigravitySessionRuntime", () => {
                   exitCode: Effect.never,
                   isRunning: Effect.succeed(false),
                   kill: () => Effect.void,
+                  unref: Effect.succeed(Effect.void),
                   stdout: Stream.fromQueue(stdoutQueue),
                   stderr: Stream.empty,
+                  all: Stream.empty,
+                  getInputFd: () => Sink.drain,
+                  getOutputFd: () => Stream.empty,
                   stdin: Sink.forEach((chunk: Uint8Array) =>
                     Effect.sync(() => {
                       capturedStdin += new TextDecoder().decode(chunk);
@@ -737,12 +745,10 @@ describe("AntigravitySessionRuntime", () => {
             capturedStdin = "";
             yield* Queue.offer(
               stdoutQueue,
-              new TextEncoder().encode(
-                JSON.stringify({
-                  event: "result",
-                  result: { status: "DONE" },
-                }) + "\n",
-              ),
+              ndjsonLine({
+                event: "result",
+                result: { status: "DONE" },
+              }),
             );
 
             for (let i = 0; i < 5; i++) {
@@ -795,7 +801,10 @@ describe("AntigravitySessionRuntime", () => {
           const outcome = yield* runtime.sendTurn({ input: "second turn" }).pipe(Effect.result);
           expect(Result.isFailure(outcome)).toBe(true);
           if (Result.isFailure(outcome)) {
-            expect(String(outcome.failure.detail)).toContain("already in progress");
+            expect(outcome.failure._tag).toBe("AntigravitySessionRuntimeError");
+            if (outcome.failure._tag === "AntigravitySessionRuntimeError") {
+              expect(outcome.failure.detail).toContain("already in progress");
+            }
           }
 
           // The first turn can still complete normally afterwards.
@@ -943,7 +952,7 @@ describe("AntigravitySessionRuntime", () => {
 
           yield* runtime.sendTurn({ input: "run tests" });
 
-          const approvalLine = JSON.stringify({
+          const approvalLine = ndjsonLine({
             event: "step_update",
             step_update: {
               step_type: "tool",
@@ -953,8 +962,8 @@ describe("AntigravitySessionRuntime", () => {
             },
           });
           // The daemon re-emits the same pending state (e.g. a refresh).
-          yield* Queue.offer(proc.stdoutQueue, new TextEncoder().encode(approvalLine + "\n"));
-          yield* Queue.offer(proc.stdoutQueue, new TextEncoder().encode(approvalLine + "\n"));
+          yield* Queue.offer(proc.stdoutQueue, approvalLine);
+          yield* Queue.offer(proc.stdoutQueue, approvalLine);
 
           for (let i = 0; i < 10; i++) {
             yield* Effect.yieldNow;
@@ -1009,12 +1018,10 @@ describe("AntigravitySessionRuntime", () => {
           yield* Queue.offer(proc.stdoutQueue, new TextEncoder().encode("{broken json...\n"));
           yield* Queue.offer(
             proc.stdoutQueue,
-            new TextEncoder().encode(
-              JSON.stringify({
-                event: "step_update",
-                step_update: { step_type: "agent_response", text_delta: "real response" },
-              }) + "\n",
-            ),
+            ndjsonLine({
+              event: "step_update",
+              step_update: { step_type: "agent_response", text_delta: "real response" },
+            }),
           );
 
           for (let i = 0; i < 10; i++) {

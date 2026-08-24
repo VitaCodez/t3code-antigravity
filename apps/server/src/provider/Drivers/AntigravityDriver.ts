@@ -112,7 +112,7 @@ export const AntigravityDriver: ProviderDriver<AntigravitySettings, AntigravityD
       const adapter = yield* makeAntigravityAdapter(effectiveConfig, {
         environment: processEnv,
         instanceId,
-        nativeEventLogger: nativeLogger,
+        ...(nativeLogger ? { nativeEventLogger: nativeLogger } : {}),
       });
       const textGeneration = yield* makeAntigravityTextGeneration(effectiveConfig, processEnv);
 

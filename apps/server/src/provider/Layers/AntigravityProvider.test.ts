@@ -45,7 +45,7 @@ describe("buildInitialAntigravityProviderSnapshot", () => {
       expect(modelSlugs).toContain("gemini-3.6-flash");
 
       const flashModel = snapshot.models.find((m) => m.slug === "gemini-3.7-flash");
-      const flashContextWindow = flashModel?.capabilities.optionDescriptors?.find(
+      const flashContextWindow = flashModel?.capabilities?.optionDescriptors?.find(
         (d) => d.id === "contextWindow",
       );
       expect(flashContextWindow).toBeDefined();
@@ -55,7 +55,7 @@ describe("buildInitialAntigravityProviderSnapshot", () => {
       }
 
       const proModel = snapshot.models.find((m) => m.slug === "gemini-2.5-pro");
-      const proContextWindow = proModel?.capabilities.optionDescriptors?.find(
+      const proContextWindow = proModel?.capabilities?.optionDescriptors?.find(
         (d) => d.id === "contextWindow",
       );
       expect(proContextWindow).toBeDefined();

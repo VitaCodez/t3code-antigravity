@@ -1,6 +1,3 @@
-import type { Project } from "./types";
-import type { SidebarThreadSummary } from "./components/Sidebar.logic";
-
 export const CONVERSATIONS_PROJECT_TITLE = "Conversations";
 
 export function isConversationsProject(project: { title: string } | null | undefined): boolean {

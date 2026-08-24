@@ -36,9 +36,7 @@ export function useHandleNewConversation() {
 
     const env = environments.find((e) => e.environmentId === primaryEnvironmentId);
     const providers = env?.serverConfig?.providers ?? [];
-    const cwd = env?.serverConfig?.attachmentsDir
-      ? env.serverConfig.attachmentsDir.replace(/[\\/]attachments$/, "/conversations")
-      : "~/.t3/conversations";
+    const cwd = "~/.t3/conversations";
 
     const projectId = newProjectId();
     const createResult = await createProject({

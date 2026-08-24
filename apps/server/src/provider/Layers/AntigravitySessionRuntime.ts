@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 import {
   ApprovalRequestId,
   CanonicalItemType,
@@ -42,6 +43,9 @@ const __dirname = NodePath.dirname(__filename);
 
 const PROVIDER = ProviderDriverKind.make("antigravity");
 export const ANTIGRAVITY_RESUME_VERSION = 1 as const;
+
+const decodeJsonStringExit = Schema.decodeUnknownExit(Schema.fromJsonString(Schema.Unknown));
+const encodeUnknownJsonString = Schema.encodeUnknownSync(Schema.fromJsonString(Schema.Unknown));
 
 export interface AntigravityResumeCursor {
   readonly schemaVersion: typeof ANTIGRAVITY_RESUME_VERSION;
@@ -406,6 +410,11 @@ export class AntigravitySessionRuntimePendingUserInputNotFoundError extends Sche
   }
 }
 
+export type AntigravitySessionRuntimeFailure =
+  | AntigravitySessionRuntimeError
+  | AntigravitySessionRuntimePendingApprovalNotFoundError
+  | AntigravitySessionRuntimePendingUserInputNotFoundError;
+
 export interface AntigravitySessionRuntimeOptions {
   readonly threadId: ThreadId;
   readonly providerInstanceId?: ProviderInstanceId;
@@ -445,12 +454,14 @@ export interface AntigravityThreadSnapshot {
 }
 
 export interface AntigravitySessionRuntimeShape {
-  readonly start: () => Effect.Effect<ProviderSession, AntigravitySessionRuntimeError>;
+  readonly start: () => Effect.Effect<ProviderSession, AntigravitySessionRuntimeFailure>;
   readonly getSession: Effect.Effect<ProviderSession>;
   readonly sendTurn: (
     input: AntigravitySessionRuntimeSendTurnInput,
-  ) => Effect.Effect<ProviderTurnStartResult, AntigravitySessionRuntimeError>;
-  readonly interruptTurn: (turnId?: TurnId) => Effect.Effect<void, AntigravitySessionRuntimeError>;
+  ) => Effect.Effect<ProviderTurnStartResult, AntigravitySessionRuntimeFailure>;
+  readonly interruptTurn: (
+    turnId?: TurnId,
+  ) => Effect.Effect<void, AntigravitySessionRuntimeFailure>;
   readonly readThread: Effect.Effect<AntigravityThreadSnapshot, AntigravitySessionRuntimeError>;
   readonly rollbackThread: (
     numTurns: number,
@@ -458,11 +469,11 @@ export interface AntigravitySessionRuntimeShape {
   readonly respondToRequest: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
-  ) => Effect.Effect<void, AntigravitySessionRuntimeError>;
+  ) => Effect.Effect<void, AntigravitySessionRuntimeFailure>;
   readonly respondToUserInput: (
     requestId: ApprovalRequestId,
     answers: ProviderUserInputAnswers,
-  ) => Effect.Effect<void, AntigravitySessionRuntimeError>;
+  ) => Effect.Effect<void, AntigravitySessionRuntimeFailure>;
   readonly events: Stream.Stream<ProviderRuntimeEvent, never>;
   readonly close: Effect.Effect<void>;
 }
@@ -576,22 +587,23 @@ export const makeAntigravitySessionRuntime = (
 
     const logNativeEvent = (direction: "in" | "out", payload: unknown): Effect.Effect<void> => {
       if (!nativeLogger) return Effect.void;
-      return nativeLogger
-        .write(
+      return Effect.gen(function* () {
+        const timestamp = yield* nowIso;
+        yield* nativeLogger.write(
           {
             direction,
-            timestamp: new Date().toISOString(),
+            timestamp,
             threadId: options.threadId,
             payload,
           },
           options.threadId,
-        )
-        .pipe(Effect.catchCause(() => Effect.void));
+        );
+      }).pipe(Effect.catchCause(() => Effect.void));
     };
 
     const makeEventId = (type: string, turnId?: TurnId): Effect.Effect<EventId> =>
       Effect.gen(function* () {
-        const uuid = yield* randomUUIDv4;
+        const uuid = yield* Effect.orDie(randomUUIDv4);
         return EventId.make(
           `${PROVIDER}:${instanceId}:${options.threadId}:${turnId ?? "session"}:${type}:${uuid}`,
         );
@@ -717,13 +729,12 @@ export const makeAntigravitySessionRuntime = (
         // normalized field-by-field in each handler below.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let parsed: { [key: string]: any } | undefined;
-        try {
-          const candidate: unknown = JSON.parse(trimmed);
+        const decodedExit = decodeJsonStringExit(trimmed);
+        if (Exit.isSuccess(decodedExit)) {
+          const candidate: unknown = decodedExit.value;
           if (candidate !== null && typeof candidate === "object") {
             parsed = candidate as Record<string, unknown>;
           }
-        } catch {
-          parsed = undefined;
         }
 
         if (!parsed) {
@@ -863,7 +874,7 @@ export const makeAntigravitySessionRuntime = (
                     // the single card already shown to the user.
                     return;
                   }
-                  const reqUuid = yield* randomUUIDv4;
+                  const reqUuid = yield* Effect.orDie(randomUUIDv4);
                   const requestId = ApprovalRequestId.make(reqUuid);
                   const runtimeRequestId = RuntimeRequestId.make(requestId);
                   const answersDeferred = yield* Deferred.make<ProviderUserInputAnswers>();
@@ -952,7 +963,7 @@ export const makeAntigravitySessionRuntime = (
                         });
 
                         yield* writeToStdin(
-                          JSON.stringify({
+                          encodeUnknownJsonString({
                             event: "user_input_response",
                             request_id: requestId,
                             answers: normalizedAnswers,
@@ -979,7 +990,7 @@ export const makeAntigravitySessionRuntime = (
                   // has an open request; keep the single card.
                   return;
                 }
-                const reqUuid = yield* randomUUIDv4;
+                const reqUuid = yield* Effect.orDie(randomUUIDv4);
                 const requestId = ApprovalRequestId.make(reqUuid);
                 const runtimeRequestId = RuntimeRequestId.make(requestId);
                 const requestType = classifyRequestType(toolName);
@@ -989,7 +1000,7 @@ export const makeAntigravitySessionRuntime = (
                   new Map(map).set(requestId, {
                     requestId,
                     requestType,
-                    detail,
+                    ...(detail !== undefined ? { detail } : {}),
                     dedupeKey: approvalDedupeKey,
                     decision: decisionDeferred,
                   }),
@@ -1037,7 +1048,7 @@ export const makeAntigravitySessionRuntime = (
                         payload: { requestType, decision: resolvedDecision },
                       });
                       yield* writeToStdin(
-                        JSON.stringify({
+                        encodeUnknownJsonString({
                           event: "permission_response",
                           request_id: requestId,
                           decision: resolvedDecision,
@@ -1102,7 +1113,7 @@ export const makeAntigravitySessionRuntime = (
 
           // 3. Direct Permission Request
           if (parsed.event === "permission_request" || parsed.event === "tool_approval_request") {
-            const reqIdStr = String(parsed.request_id ?? (yield* randomUUIDv4));
+            const reqIdStr = String(parsed.request_id ?? (yield* Effect.orDie(randomUUIDv4)));
             const requestId = ApprovalRequestId.make(reqIdStr);
             const existingApprovals = yield* Ref.get(pendingApprovalsRef);
             if (existingApprovals.has(requestId)) {
@@ -1121,7 +1132,7 @@ export const makeAntigravitySessionRuntime = (
               new Map(map).set(requestId, {
                 requestId,
                 requestType,
-                detail,
+                ...(detail !== undefined ? { detail } : {}),
                 decision: decisionDeferred,
               }),
             );
@@ -1166,7 +1177,7 @@ export const makeAntigravitySessionRuntime = (
                     payload: { requestType, decision: resolvedDecision },
                   });
                   yield* writeToStdin(
-                    JSON.stringify({
+                    encodeUnknownJsonString({
                       event: "permission_response",
                       request_id: requestId,
                       decision: resolvedDecision,
@@ -1704,22 +1715,18 @@ export const makeAntigravitySessionRuntime = (
       Effect.gen(function* () {
         const isClosed = yield* Ref.get(closedRef);
         if (isClosed) {
-          return yield* Effect.fail(
-            new AntigravitySessionRuntimeError({
-              threadId: options.threadId,
-              detail: "Antigravity session is closed.",
-            }),
-          );
+          return yield* new AntigravitySessionRuntimeError({
+            threadId: options.threadId,
+            detail: "Antigravity session is closed.",
+          });
         }
 
         const inFlightTurn = yield* Ref.get(activeTurnRef);
         if (inFlightTurn) {
-          return yield* Effect.fail(
-            new AntigravitySessionRuntimeError({
-              threadId: options.threadId,
-              detail: `A turn is already in progress (${inFlightTurn.turnId}). Interrupt it before starting a new one.`,
-            }),
-          );
+          return yield* new AntigravitySessionRuntimeError({
+            threadId: options.threadId,
+            detail: `A turn is already in progress (${inFlightTurn.turnId}). Interrupt it before starting a new one.`,
+          });
         }
 
         const selectedModel = input.model ?? (yield* Ref.get(currentModelRef));
@@ -1832,7 +1839,7 @@ export const makeAntigravitySessionRuntime = (
         });
 
         // Write turn message JSON to persistent daemon process stdin
-        const turnMessageJson = JSON.stringify({
+        const turnMessageJson = encodeUnknownJsonString({
           event: "user",
           message: {
             content: textPrompt,
@@ -1889,7 +1896,7 @@ export const makeAntigravitySessionRuntime = (
         yield* Ref.set(pendingUserInputsRef, new Map());
 
         // Write interrupt event to stdin
-        yield* writeToStdin(JSON.stringify({ event: "interrupt" })).pipe(
+        yield* writeToStdin(encodeUnknownJsonString({ event: "interrupt" })).pipe(
           Effect.catchCause(() => Effect.void),
         );
 
@@ -1919,14 +1926,12 @@ export const makeAntigravitySessionRuntime = (
     const respondToRequest = (
       requestId: ApprovalRequestId,
       decision: ProviderApprovalDecision,
-    ): Effect.Effect<void, AntigravitySessionRuntimeError> =>
+    ): Effect.Effect<void, AntigravitySessionRuntimeFailure> =>
       Effect.gen(function* () {
         const pendingApprovals = yield* Ref.get(pendingApprovalsRef);
         const pending = pendingApprovals.get(requestId);
         if (!pending) {
-          return yield* Effect.fail(
-            new AntigravitySessionRuntimePendingApprovalNotFoundError({ requestId }),
-          );
+          return yield* new AntigravitySessionRuntimePendingApprovalNotFoundError({ requestId });
         }
         yield* Deferred.succeed(pending.decision, decision);
       });
@@ -1934,22 +1939,20 @@ export const makeAntigravitySessionRuntime = (
     const respondToUserInput = (
       requestId: ApprovalRequestId,
       answers: ProviderUserInputAnswers,
-    ): Effect.Effect<void, AntigravitySessionRuntimeError> =>
+    ): Effect.Effect<void, AntigravitySessionRuntimeFailure> =>
       Effect.gen(function* () {
         const pendingUserInputs = yield* Ref.get(pendingUserInputsRef);
         const pending = pendingUserInputs.get(requestId);
         if (!pending) {
-          return yield* Effect.fail(
-            new AntigravitySessionRuntimePendingUserInputNotFoundError({ requestId }),
-          );
+          return yield* new AntigravitySessionRuntimePendingUserInputNotFoundError({ requestId });
         }
         yield* Deferred.succeed(pending.answers, answers);
       });
 
-    const readThread = Effect.gen(function* () {
-      const turns = yield* Ref.get(turnsRef);
-      return { threadId: options.threadId, turns };
-    });
+    const readThread = Effect.map(Ref.get(turnsRef), (turns) => ({
+      threadId: options.threadId,
+      turns,
+    }));
 
     const rollbackThread = (numTurns: number) =>
       Effect.gen(function* () {

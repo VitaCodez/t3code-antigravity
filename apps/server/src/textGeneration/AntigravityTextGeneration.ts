@@ -1,4 +1,6 @@
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
@@ -21,6 +23,8 @@ import {
 } from "./TextGenerationUtils.ts";
 
 const ANTIGRAVITY_TEXT_TIMEOUT_MS = 60_000;
+
+const isTextGenerationError = Schema.is(TextGenerationError);
 
 function parseJsonOutput<T>(raw: string): T | undefined {
   const jsonStr = extractJsonObject(raw);
@@ -89,16 +93,35 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
 
       const exitCode = yield* child.exitCode;
       if (exitCode !== 0) {
-        return yield* Effect.fail(
-          new TextGenerationError({
-            operation,
-            detail: `Antigravity CLI exited with code ${exitCode}`,
-          }),
-        );
+        return yield* new TextGenerationError({
+          operation,
+          detail: `Antigravity CLI exited with code ${exitCode}`,
+        });
       }
 
       return stdout.trim();
-    }).pipe(Effect.timeout(ANTIGRAVITY_TEXT_TIMEOUT_MS));
+    }).pipe(
+      Effect.mapError((cause) =>
+        isTextGenerationError(cause)
+          ? cause
+          : new TextGenerationError({
+              operation,
+              detail: "Antigravity CLI text generation failed.",
+              cause,
+            }),
+      ),
+      Effect.timeoutOption(ANTIGRAVITY_TEXT_TIMEOUT_MS),
+      Effect.flatMap(
+        Option.match({
+          onNone: () =>
+            Effect.fail(
+              new TextGenerationError({ operation, detail: "Antigravity CLI request timed out." }),
+            ),
+          onSome: (value) => Effect.succeed(value),
+        }),
+      ),
+      Effect.scoped,
+    );
 
   const generateCommitMessage: TextGeneration.TextGeneration["Service"]["generateCommitMessage"] =
     Effect.fn("AntigravityTextGeneration.generateCommitMessage")(function* (input) {
@@ -110,7 +133,13 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
         ? sanitizeBranchFragment(input.stagedSummary.slice(0, 30) || "feature-branch")
         : undefined;
 
-      const prompt = buildCommitMessagePrompt(input);
+      const { prompt } = buildCommitMessagePrompt({
+        branch: input.branch,
+        stagedSummary: input.stagedSummary,
+        stagedPatch: input.stagedPatch,
+        includeBranch: input.includeBranch === true,
+        policy: input.policy,
+      });
       const cliResult = yield* runAntigravityCli(
         prompt,
         input.cwd,
@@ -147,7 +176,15 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
       const fallbackTitle = sanitizePrTitle(input.diffSummary.slice(0, 72) || "Update changes");
       const fallbackBody = input.diffSummary.trim();
 
-      const prompt = buildPrContentPrompt(input);
+      const { prompt } = buildPrContentPrompt({
+        baseBranch: input.baseBranch,
+        headBranch: input.headBranch,
+        commitSummary: input.commitSummary,
+        diffSummary: input.diffSummary,
+        diffPatch: input.diffPatch,
+        changeRequestTemplate: input.changeRequestTemplate,
+        policy: input.policy,
+      });
       const cliResult = yield* runAntigravityCli(
         prompt,
         input.cwd,
@@ -175,7 +212,10 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
     Effect.fn("AntigravityTextGeneration.generateBranchName")(function* (input) {
       const fallbackBranch = sanitizeBranchFragment(input.message.slice(0, 30) || "feature-branch");
 
-      const prompt = buildBranchNamePrompt(input);
+      const { prompt } = buildBranchNamePrompt({
+        message: input.message,
+        attachments: input.attachments,
+      });
       const cliResult = yield* runAntigravityCli(
         prompt,
         input.cwd,
@@ -201,7 +241,11 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
     Effect.fn("AntigravityTextGeneration.generateThreadTitle")(function* (input) {
       const fallbackTitle = sanitizeThreadTitle(input.message.slice(0, 50) || "New Thread");
 
-      const prompt = buildThreadTitlePrompt(input);
+      const { prompt } = buildThreadTitlePrompt({
+        message: input.message,
+        previousTitle: input.previousTitle,
+        attachments: input.attachments,
+      });
       const cliResult = yield* runAntigravityCli(
         prompt,
         input.cwd,

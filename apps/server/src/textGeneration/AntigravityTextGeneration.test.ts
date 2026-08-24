@@ -3,6 +3,7 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as Sink from "effect/Sink";
 import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { AntigravitySettings, ProviderInstanceId } from "@t3tools/contracts";
@@ -16,8 +17,15 @@ function mockJsonSpawnerHandle(jsonResponse: string) {
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(1234),
     exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+    isRunning: Effect.succeed(false),
+    kill: () => Effect.void,
+    unref: Effect.succeed(Effect.void),
+    stdin: Sink.drain,
     stdout: Stream.make(new TextEncoder().encode(jsonResponse)),
     stderr: Stream.empty,
+    all: Stream.empty,
+    getInputFd: () => Sink.drain,
+    getOutputFd: () => Stream.empty,
   });
 }
 
@@ -69,8 +77,15 @@ describe("AntigravityTextGeneration", () => {
               ChildProcessSpawner.makeHandle({
                 pid: ChildProcessSpawner.ProcessId(1234),
                 exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(1)),
+                isRunning: Effect.succeed(false),
+                kill: () => Effect.void,
+                unref: Effect.succeed(Effect.void),
+                stdin: Sink.drain,
                 stdout: Stream.empty,
                 stderr: Stream.make(new TextEncoder().encode("CLI error")),
+                all: Stream.empty,
+                getInputFd: () => Sink.drain,
+                getOutputFd: () => Stream.empty,
               }),
             ),
           ),

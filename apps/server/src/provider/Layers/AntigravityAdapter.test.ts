@@ -3,8 +3,9 @@ import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
-import * as Stream from "effect/Stream";
 import * as Schema from "effect/Schema";
+import * as Sink from "effect/Sink";
+import * as Stream from "effect/Stream";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import {
   AntigravitySettings,
@@ -26,8 +27,15 @@ function mockSpawnerHandle() {
   return ChildProcessSpawner.makeHandle({
     pid: ChildProcessSpawner.ProcessId(1234),
     exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(0)),
+    isRunning: Effect.succeed(false),
+    kill: () => Effect.void,
+    unref: Effect.succeed(Effect.void),
+    stdin: Sink.drain,
     stdout: Stream.make(new TextEncoder().encode("Hello from Antigravity mock")),
     stderr: Stream.empty,
+    all: Stream.empty,
+    getInputFd: () => Sink.drain,
+    getOutputFd: () => Stream.empty,
   });
 }
 
