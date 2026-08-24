@@ -5,11 +5,11 @@
 > This project is a customized fork and extension of [**T3 Code**](https://github.com/pingdotgg/t3code), originally created by [Theo Browne (t3.gg)](https://t3.gg) and [pingdotgg](https://github.com/pingdotgg).  
 > All core architecture, design, and foundational code are the original work of [T3 Tools Inc. / pingdotgg](https://github.com/pingdotgg/t3code) under the MIT License. This repository includes custom extensions and community features described below.
 
-##  Added Features & Modifications
+## Added Features & Modifications
 
--  **Antigravity AI Provider**: Added Google Antigravity (`agy` CLI) as an integrated coding agent provider alongside Claude, Codex, Cursor, Grok, and OpenCode.
--  **LaTeX Math Rendering**: Integrated full LaTeX rendering support for mathematical formulas and notation inside chat messages.
--  **Conversations Sidebar**: Added a dedicated **Conversations** field/history viewer in the sidebar for quickly browsing, searching, and opening recent conversation sessions.
+- **Antigravity AI Provider**: Added Google Antigravity (`agy` CLI) as an integrated coding agent provider alongside Claude, Codex, Cursor, Grok, and OpenCode.
+- **LaTeX Math Rendering**: Integrated full LaTeX rendering support for mathematical formulas and notation inside chat messages.
+- **Conversations Sidebar**: Added a dedicated **Conversations** field/history viewer in the sidebar for quickly browsing, searching, and opening recent conversation sessions.
 
 ---
 
@@ -82,6 +82,7 @@ Full docs live in [docs/](./docs). There's no docs site yet.
 - [Install and first run](./docs/user/install.md)
 - [Permission modes](./docs/user/permission-modes.md)
 - [Keyboard shortcuts](./docs/user/keybindings.md)
+- [Customize a project icon](./docs/user/project-settings.md)
 - [Remote access from a phone or another machine](./docs/user/remote-access.md)
 - [Keeping app and server in sync](./docs/user/updating.md)
 - [Source control integrations](./docs/user/source-control.md)

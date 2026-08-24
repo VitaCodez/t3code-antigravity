@@ -35,6 +35,7 @@ export type ModelEsque = {
   name: string;
   shortName?: string | undefined;
   subProvider?: string | undefined;
+  isLegacy?: boolean | undefined;
 };
 
 function escapeRegExp(value: string): string {

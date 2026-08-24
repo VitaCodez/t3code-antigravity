@@ -18,11 +18,19 @@ export const ExecutionEnvironmentPlatform = Schema.Struct({
   os: ExecutionEnvironmentPlatformOs,
   arch: ExecutionEnvironmentPlatformArch,
 });
+
+/**
+ * Where a new thread runs: the project's current checkout ("local") or a
+ * fresh git worktree ("worktree"). Lives here (not settings.ts) so
+ * orchestration contracts can reference it without an import cycle.
+ */
+export const ThreadEnvMode = Schema.Literals(["local", "worktree"]);
+export type ThreadEnvMode = typeof ThreadEnvMode.Type;
 export type ExecutionEnvironmentPlatform = typeof ExecutionEnvironmentPlatform.Type;
 
-/** How a server can replace itself with another version when asked over RPC:
-    "boot-service" rewrites the systemd user unit and restarts it; "respawn"
-    installs the target version and respawns the foreground process. */
+/** How a server can replace itself with another version when asked over RPC.
+    New servers only advertise the stable launcher-backed "boot-service" path;
+    "respawn" remains decodable for compatibility with older servers. */
 export const ServerSelfUpdateMethod = Schema.Literals(["boot-service", "respawn"]);
 export type ServerSelfUpdateMethod = typeof ServerSelfUpdateMethod.Type;
 
@@ -47,6 +55,12 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server understands thread.snooze / thread.unsnooze commands. Same
       version-skew contract as threadSettlement. */
   threadSnooze: Schema.optionalKey(Schema.Boolean),
+  /** Server understands thread.pin / thread.unpin commands. Same
+      version-skew contract as threadSettlement. */
+  threadPinning: Schema.optionalKey(Schema.Boolean),
+  /** Server understands thread.pin.reorder (and orderKey on thread.pin).
+      Same version-skew contract as threadSettlement. */
+  threadPinReorder: Schema.optionalKey(Schema.Boolean),
   /** Server understands regenerateTitle on thread.meta.update. Absent on
       older servers, so clients hide the action instead of sending it. */
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),

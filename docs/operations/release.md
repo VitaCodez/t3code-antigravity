@@ -34,14 +34,15 @@ This document covers the unified release workflow for stable and nightly desktop
 
 ## Required release credentials
 
-The release workflow requires these GitHub Actions secrets in addition to the platform and deployment
+Stable releases require these GitHub Actions secrets in addition to the platform and deployment
 credentials documented below:
 
 - `RELEASE_APP_ID`
 - `RELEASE_APP_PRIVATE_KEY`
 
-The GitHub Release job uses them to mint the token that publishes release assets. Stable releases use
-them again in the finalize job, which can commit and push aligned package versions to `main`.
+The finalize job uses them to commit and push aligned package versions to `main` as the Release App.
+GitHub Release publication uses the repository-scoped workflow token so it has a rate-limit quota
+independent from the shared Release App installation.
 
 ## T3 Connect relay deployment
 
@@ -187,8 +188,10 @@ the **Update server** action targeting a package version that does not exist yet
 
 For a release smoke test, confirm `npm view t3@<version> version` returns the expected version, then
 connect the new client to a server on the previous version and verify that the update action
-reconnects to the matching server. Test one automatic path and the manual or desktop-managed
-guidance when those environments are available.
+reconnects to the matching server. Use releases with identical migration manifests for the
+automatic path. When the manifest changed, verify that the remote action stops before restart and
+shows the exact local `npx t3@<version> service update` command. Also test the manual or
+desktop-managed guidance when those environments are available.
 
 ## Desktop auto-update notes
 
