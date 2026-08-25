@@ -291,6 +291,10 @@ export type SessionExitedPayload = typeof SessionExitedPayload.Type;
 
 const ThreadStartedPayload = Schema.Struct({
   providerThreadId: Schema.optional(TrimmedNonEmptyStringSchema),
+  // Opaque provider resume state announced alongside the thread identity so
+  // the server can persist it the moment it becomes known (providers such as
+  // antigravity only learn their conversation id after the first prompt).
+  resumeCursor: Schema.optional(Schema.Unknown),
 });
 export type ThreadStartedPayload = typeof ThreadStartedPayload.Type;
 

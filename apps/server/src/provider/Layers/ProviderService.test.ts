@@ -1601,6 +1601,43 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
     }),
   );
 
+  it.effect("persists resume cursor announced on thread.started", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const session = yield* provider.startSession(asThreadId("thread-cursor-1"), {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: asThreadId("thread-cursor-1"),
+        runtimeMode: "full-access",
+      });
+
+      const before = yield* directory.getBinding(session.threadId);
+      assert.equal(Option.isSome(before), true);
+
+      fanout.codex.emit({
+        type: "thread.started",
+        eventId: asEventId("evt-cursor-1"),
+        provider: CODEX_DRIVER,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        threadId: session.threadId,
+        payload: {
+          providerThreadId: "provider-thread-1",
+          resumeCursor: { schemaVersion: 1, threadId: "provider-thread-1" },
+        },
+      } as unknown as LegacyProviderRuntimeEvent);
+      yield* advanceTestClock(50);
+
+      const binding = yield* directory.getBinding(session.threadId);
+      assert.equal(Option.isSome(binding), true);
+      if (Option.isNone(binding)) return;
+      assert.deepEqual(binding.value.resumeCursor, {
+        schemaVersion: 1,
+        threadId: "provider-thread-1",
+      });
+    }),
+  );
+
   it.effect("fans out canonical runtime events in emission order", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;

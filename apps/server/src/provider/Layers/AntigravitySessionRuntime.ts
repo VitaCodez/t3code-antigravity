@@ -764,7 +764,17 @@ export const makeAntigravitySessionRuntime = (
               threadId: options.threadId,
               createdAt,
               type: "thread.started",
-              payload: { providerThreadId: convId },
+              // The resume cursor rides on the announcement so the server can
+              // persist the conversation id as soon as the daemon reports it;
+              // without this a restart between turns starts a fresh agy
+              // conversation and the thread loses its history.
+              payload: {
+                providerThreadId: convId,
+                resumeCursor: {
+                  schemaVersion: ANTIGRAVITY_RESUME_VERSION,
+                  conversationId: convId,
+                },
+              },
             });
             return;
           }

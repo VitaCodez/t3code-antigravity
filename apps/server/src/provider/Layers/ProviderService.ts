@@ -284,6 +284,47 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       });
     });
 
+  // Some providers (e.g. antigravity) only learn their durable conversation
+  // identity after the first prompt, so `startSession` persists no resume
+  // state. When an adapter announces both the provider thread id and its
+  // resume cursor on `thread.started`, write it through to the session
+  // directory immediately — otherwise a restart between turns would silently
+  // start a fresh provider conversation.
+  const persistAnnouncedResumeCursor = (
+    source: {
+      readonly instanceId: ProviderInstanceId;
+      readonly provider: ProviderDriverKind;
+    },
+    event: ProviderRuntimeEvent,
+  ): Effect.Effect<void> => {
+    if (event.type !== "thread.started") return Effect.void;
+    const { providerThreadId, resumeCursor } = event.payload;
+    if (
+      typeof providerThreadId !== "string" ||
+      providerThreadId.trim().length === 0 ||
+      resumeCursor === undefined ||
+      resumeCursor === null ||
+      typeof resumeCursor !== "object"
+    ) {
+      return Effect.void;
+    }
+    return directory
+      .upsert({
+        threadId: event.threadId,
+        provider: source.provider,
+        providerInstanceId: source.instanceId,
+        resumeCursor,
+      })
+      .pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("provider.resume_cursor.persist.failed", {
+            threadId: event.threadId,
+            cause,
+          }),
+        ),
+      );
+  };
+
   const processRuntimeEvent = (
     source: {
       readonly instanceId: ProviderInstanceId;
@@ -296,7 +337,10 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         increment(providerRuntimeEventsTotal, {
           provider: canonicalEvent.provider,
           eventType: canonicalEvent.type,
-        }).pipe(Effect.andThen(publishRuntimeEvent(canonicalEvent))),
+        }).pipe(
+          Effect.andThen(persistAnnouncedResumeCursor(source, canonicalEvent)),
+          Effect.andThen(publishRuntimeEvent(canonicalEvent)),
+        ),
       ),
     );
 

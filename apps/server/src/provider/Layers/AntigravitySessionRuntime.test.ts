@@ -286,6 +286,17 @@ describe("AntigravitySessionRuntime", () => {
           // compactsAutomatically is only reported when the CLI reports it.
           expect(usageEvents[0].payload.usage.compactsAutomatically).toBeUndefined();
 
+          // The conversation id learned from the daemon's init event must be
+          // announced with a resume cursor so the server can persist it and
+          // resume the conversation after a restart.
+          const threadStarted = eventCollector.find((e) => e.type === "thread.started");
+          expect(threadStarted).toBeDefined();
+          expect(threadStarted?.payload?.providerThreadId).toBe("conv-123");
+          expect(threadStarted?.payload?.resumeCursor).toEqual({
+            schemaVersion: 1,
+            conversationId: "conv-123",
+          });
+
           expect(capturedStdin).toContain('"event":"user"');
           expect(capturedStdin).toContain("Hello Antigravity");
 
