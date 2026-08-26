@@ -3020,6 +3020,7 @@ function SidebarConversationsSection({
                 cancelRename={cancelRename}
                 attemptArchiveThread={attemptArchiveThread}
                 openPrLink={openPrLink}
+                openPullRequestsInRightPanel={false}
               />
             );
           })}
