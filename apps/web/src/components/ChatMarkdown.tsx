@@ -361,7 +361,12 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
     "*": (defaultSchema.attributes?.["*"] ?? []).filter((attribute) => attribute !== "title"),
     code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
     blockquote: [...(defaultSchema.attributes?.blockquote ?? []), "dataAlert"],
-    div: [...(defaultSchema.attributes?.div ?? []), ...CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      ...CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES,
+      "className",
+      "style",
+    ],
     img: [...(defaultSchema.attributes?.img ?? []), "dataLocalSrc", "dataMarkdownTitle"],
     span: [
       ...(defaultSchema.attributes?.span ?? []),
@@ -370,7 +375,6 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
       "ariaHidden",
       "aria-hidden",
     ],
-    div: [...(defaultSchema.attributes?.div ?? []), "className", "style"],
     annotation: ["encoding"],
   },
   tagNames: [
