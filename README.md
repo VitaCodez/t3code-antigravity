@@ -1,4 +1,4 @@
-# T3 Code (Antigravity Edition) currect version: v0.0.34
+# T3 Code (Antigravity Edition) currect version: v0.0.37
 
 > [!IMPORTANT]
 > **Fork & Attribution Notice:**  
