@@ -599,6 +599,52 @@ describe("parseAntigravityLine", () => {
     expect(record?.dedupeKey).toBe("test-session-123:1");
     expect(record?.totals.outputTokens).toBeGreaterThan(0);
     expect(record?.totals.reasoningTokens).toBeGreaterThan(0);
+    expect(record?.totals.uncachedInputTokens).toBeGreaterThan(0);
+  });
+
+  it("calculates prompt cache sharing across multi-turn sessions", () => {
+    const state = initialAntigravityScanState("test-session-cache");
+    const turn1User = JSON.stringify({
+      step_index: 0,
+      source: "USER_EXPLICIT",
+      type: "USER_INPUT",
+      content: "A".repeat(400), // ~100 tokens
+      created_at: "2026-08-30T10:00:00Z",
+    });
+    parseAntigravityLine(turn1User, state);
+
+    const turn1Model = JSON.stringify({
+      step_index: 1,
+      source: "MODEL",
+      type: "PLANNER_RESPONSE",
+      content: "B".repeat(200), // ~50 tokens
+      created_at: "2026-08-30T10:00:02Z",
+    });
+    const record1 = parseAntigravityLine(turn1Model, state);
+    expect(record1?.totals.uncachedInputTokens).toBe(100);
+    expect(record1?.totals.cachedInputTokens).toBe(0);
+    expect(record1?.totals.outputTokens).toBe(50);
+
+    const turn2User = JSON.stringify({
+      step_index: 2,
+      source: "USER_EXPLICIT",
+      type: "USER_INPUT",
+      content: "C".repeat(200), // ~50 tokens delta
+      created_at: "2026-08-30T10:00:10Z",
+    });
+    parseAntigravityLine(turn2User, state);
+
+    const turn2Model = JSON.stringify({
+      step_index: 3,
+      source: "MODEL",
+      type: "PLANNER_RESPONSE",
+      content: "D".repeat(100), // ~25 tokens
+      created_at: "2026-08-30T10:00:12Z",
+    });
+    const record2 = parseAntigravityLine(turn2Model, state);
+    expect(record2?.totals.uncachedInputTokens).toBe(50);
+    expect(record2?.totals.cachedInputTokens).toBe(150); // 100 in + 50 out from turn 1
+    expect(record2?.totals.outputTokens).toBe(25);
   });
 
   it("extracts explicit token usage when provided in PLANNER_RESPONSE", () => {

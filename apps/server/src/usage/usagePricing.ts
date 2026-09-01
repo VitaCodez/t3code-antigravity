@@ -111,7 +111,14 @@ function normalizeRateKey(model: string): string {
  * inconsistent about casing.
  */
 export function normalizeModelName(model: string): string {
-  return bareModelName(normalizeRateKey(model));
+  const bare = bareModelName(normalizeRateKey(model));
+  const geminiMatch = bare.match(/gemini[\s-]*([0-9.]+)(?:[\s-]+(flash|pro))?/i);
+  if (geminiMatch) {
+    const version = geminiMatch[1];
+    const tier = (geminiMatch[2] ?? "flash").toLowerCase();
+    return `gemini-${version}-${tier}`;
+  }
+  return bare;
 }
 
 function bareModelName(key: string): string {
@@ -139,23 +146,16 @@ export function lookupRate(table: RateTable, model: string): ModelRate | null {
   const key = normalizeRateKey(model);
   const bareName = bareModelName(key);
   if (bareName.length === 0 || UNPRICEABLE_MODELS.has(bareName)) return null;
+
+  // Direct qualified key lookup (preserves provider-isolated keys like other/claude-fable-5)
   const direct = table.get(key);
   if (direct !== undefined) return direct;
 
-  // Only canonicalize Gemini names for bare / gemini-prefixed keys
+  // If unqualified or gemini-prefixed, resolve canonical model name
   if (!key.includes("/") || key.startsWith("gemini/")) {
-    const geminiMatch = bareName.match(/gemini[\s-]*([0-9.]+)(?:[\s-]+(flash|pro))?/i);
-    if (geminiMatch) {
-      const version = geminiMatch[1];
-      const tier = (geminiMatch[2] ?? "flash").toLowerCase();
-      const candidateSlug = `gemini-${version}-${tier}`;
-      const mapped = table.get(candidateSlug) ?? table.get(`gemini/${candidateSlug}`);
-      if (mapped !== undefined) return mapped;
-      // Fall back to latest equivalent flash/pro rate if point version not in table
-      const fallbackSlug = `gemini-2.5-${tier}`;
-      const fallbackRate = table.get(fallbackSlug) ?? table.get(`gemini/${fallbackSlug}`);
-      if (fallbackRate !== undefined) return fallbackRate;
-    }
+    const canonical = normalizeModelName(bareName);
+    const resolved = table.get(canonical) ?? table.get(`gemini/${canonical}`);
+    if (resolved !== undefined) return resolved;
   }
 
   return null;

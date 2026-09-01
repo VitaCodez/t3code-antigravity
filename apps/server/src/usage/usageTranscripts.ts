@@ -73,10 +73,11 @@ export function mightCarryUsage(line: string, provider: UsageProviderKind): bool
   if (provider === "antigravity") {
     return (
       line.includes('"PLANNER_RESPONSE"') ||
-      line.includes('"USER_SETTINGS_CHANGE"') ||
-      line.includes('"Model Selection"') ||
+      line.includes('"USER_INPUT"') ||
+      line.includes('"CHECKPOINT"') ||
       line.includes('"token_usage"') ||
-      line.includes('"usage"')
+      line.includes('"usage"') ||
+      line.includes('"content"')
     );
   }
   return line.includes('"token_count"');
@@ -501,12 +502,16 @@ export function parseGrokLine(line: string): readonly UsageRecord[] {
 export interface AntigravityScanState {
   activeModel: string;
   sessionId: string;
+  accumulatedContextChars: number;
+  lastTurnContextChars: number;
 }
 
 export function initialAntigravityScanState(fallbackSessionId = ""): AntigravityScanState {
   return {
-    activeModel: "gemini-2.5-flash",
+    activeModel: "gemini-3.7-flash",
     sessionId: fallbackSessionId,
+    accumulatedContextChars: 0,
+    lastTurnContextChars: 0,
   };
 }
 
@@ -538,6 +543,7 @@ export function parseAntigravityLine(
     if (match?.[1]) {
       state.activeModel = match[1].trim();
     }
+    state.accumulatedContextChars += content.length;
     return null;
   }
 
@@ -548,11 +554,15 @@ export function parseAntigravityLine(
     if (sessionMatch?.[1]) {
       state.sessionId = sessionMatch[1];
     }
+    state.accumulatedContextChars += content.length;
     return null;
   }
 
   // Only PLANNER_RESPONSE from MODEL represents assistant generation
   if (record["type"] !== "PLANNER_RESPONSE" || record["source"] !== "MODEL") {
+    if (typeof record["content"] === "string") {
+      state.accumulatedContextChars += record["content"].length;
+    }
     return null;
   }
 
@@ -562,6 +572,13 @@ export function parseAntigravityLine(
   const stepIndex = typeof record["step_index"] === "number" ? record["step_index"] : 0;
   const sessionId = state.sessionId;
   const dedupeKey = sessionId ? `${sessionId}:${stepIndex}` : null;
+
+  const content = typeof record["content"] === "string" ? record["content"] : "";
+  const thinking = typeof record["thinking"] === "string" ? record["thinking"] : "";
+  const outputChars = content.length;
+  const thinkingChars = thinking.length;
+  const estimatedOutputTokens = Math.max(1, Math.ceil((outputChars + thinkingChars) / 4));
+  const estimatedThinkingTokens = Math.ceil(thinkingChars / 4);
 
   // Check if explicit token usage is attached
   const usage = record["usage"] ?? record["tokens"];
@@ -574,25 +591,30 @@ export function parseAntigravityLine(
         u["cached_tokens"] ?? u["cached_input_tokens"] ?? u["cachedInputTokens"],
       ),
       cacheCreationTokens: 0,
-      outputTokens: int(u["output_tokens"] ?? u["completion_tokens"] ?? u["outputTokens"]),
-      reasoningTokens: int(u["thinking_tokens"] ?? u["reasoning_tokens"] ?? u["reasoningTokens"]),
+      outputTokens:
+        int(u["output_tokens"] ?? u["completion_tokens"] ?? u["outputTokens"]) ||
+        estimatedOutputTokens,
+      reasoningTokens:
+        int(u["thinking_tokens"] ?? u["reasoning_tokens"] ?? u["reasoningTokens"]) ||
+        estimatedThinkingTokens,
     };
   } else {
-    // Estimate tokens from content and thinking if raw counts were not preserved
-    const content = typeof record["content"] === "string" ? record["content"] : "";
-    const thinking = typeof record["thinking"] === "string" ? record["thinking"] : "";
-    const outputChars = content.length;
-    const thinkingChars = thinking.length;
-    const estimatedOutputTokens = Math.max(1, Math.ceil(outputChars / 4));
-    const estimatedThinkingTokens = Math.ceil(thinkingChars / 4);
+    // Agent context accumulates across turns: prior context is cached, turn delta is uncached
+    const deltaChars = Math.max(0, state.accumulatedContextChars - state.lastTurnContextChars);
+    const uncachedTokens = Math.max(1, Math.ceil(deltaChars / 4));
+    const cachedTokens = Math.max(0, Math.ceil(state.lastTurnContextChars / 4));
+
     totals = {
-      uncachedInputTokens: 0,
-      cachedInputTokens: 0,
+      uncachedInputTokens: uncachedTokens,
+      cachedInputTokens: cachedTokens,
       cacheCreationTokens: 0,
-      outputTokens: estimatedOutputTokens + estimatedThinkingTokens,
+      outputTokens: estimatedOutputTokens,
       reasoningTokens: estimatedThinkingTokens,
     };
   }
+
+  state.lastTurnContextChars = state.accumulatedContextChars + outputChars + thinkingChars;
+  state.accumulatedContextChars += outputChars + thinkingChars;
 
   return {
     provider: "antigravity",
