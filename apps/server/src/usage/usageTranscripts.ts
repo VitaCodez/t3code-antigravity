@@ -538,7 +538,7 @@ export function parseAntigravityLine(
   if (record["type"] === "USER_INPUT") {
     const content = typeof record["content"] === "string" ? record["content"] : "";
     const match = content.match(
-      /`Model Selection` from [^`\n]+ to ([^\n`]+?)(?:\.\s*No need|\.\n|\.$|\n|$)/i,
+      /`Model Selection`\s+from\s+\S+\s+to\s+(.+?)(?:\.\s+No need|\.\s*\n|\.$|\n|$)/i,
     );
     if (match?.[1]) {
       state.activeModel = match[1].trim();

@@ -18,8 +18,8 @@ import type { UsageProviderKind } from "@t3tools/contracts";
 
 import type { UsageRecord } from "./usageTranscripts.ts";
 
-// v3: Antigravity transcript scanning, model canonicalization, and context token calculation.
-export const USAGE_SCAN_CACHE_VERSION = 3 as const;
+// v4: Fixed regex for Antigravity model name extraction and Gemini pricing lookup.
+export const USAGE_SCAN_CACHE_VERSION = 4 as const;
 
 export interface CachedFile {
   readonly size: number;
