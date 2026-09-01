@@ -2,7 +2,9 @@ import { describe, expect, it } from "@effect/vitest";
 
 import {
   GROK_COST_USD_TICKS_PER_DOLLAR,
+  initialAntigravityScanState,
   initialCodexScanState,
+  parseAntigravityLine,
   parseClaudeLine,
   parseCodexLine,
   parseGrokLine,
@@ -562,5 +564,82 @@ describe("parseGrokLine", () => {
 
     const records = parseGrokLine(line);
     expect(records[0]?.timestampMs).toBe(1_786_372_566_000);
+  });
+});
+
+describe("parseAntigravityLine", () => {
+  it("tracks active model changes from user settings in transcript", () => {
+    const state = initialAntigravityScanState("test-session-123");
+    const userInputLine = JSON.stringify({
+      step_index: 0,
+      source: "USER_EXPLICIT",
+      type: "USER_INPUT",
+      content:
+        "<USER_REQUEST>Hello</USER_REQUEST>\n<USER_SETTINGS_CHANGE>\nThe user changed setting `Model Selection` from None to Gemini 3.7 Flash (Medium).\n</USER_SETTINGS_CHANGE>",
+      created_at: "2026-08-30T10:00:00Z",
+    });
+
+    expect(parseAntigravityLine(userInputLine, state)).toBeNull();
+    expect(state.activeModel).toBe("Gemini 3.7 Flash (Medium)");
+
+    const modelResponseLine = JSON.stringify({
+      step_index: 1,
+      source: "MODEL",
+      type: "PLANNER_RESPONSE",
+      content: "Hello! How can I help you?",
+      thinking: "Thinking process here...",
+      created_at: "2026-08-30T10:00:05Z",
+    });
+
+    const record = parseAntigravityLine(modelResponseLine, state);
+    expect(record).not.toBeNull();
+    expect(record?.provider).toBe("antigravity");
+    expect(record?.model).toBe("Gemini 3.7 Flash (Medium)");
+    expect(record?.sessionId).toBe("test-session-123");
+    expect(record?.dedupeKey).toBe("test-session-123:1");
+    expect(record?.totals.outputTokens).toBeGreaterThan(0);
+    expect(record?.totals.reasoningTokens).toBeGreaterThan(0);
+  });
+
+  it("extracts explicit token usage when provided in PLANNER_RESPONSE", () => {
+    const state = initialAntigravityScanState("session-abc");
+    state.activeModel = "gemini-2.5-pro";
+
+    const responseWithTokens = JSON.stringify({
+      step_index: 5,
+      source: "MODEL",
+      type: "PLANNER_RESPONSE",
+      content: "Result",
+      usage: {
+        input_tokens: 1500,
+        cached_tokens: 500,
+        output_tokens: 300,
+        thinking_tokens: 100,
+      },
+      created_at: "2026-08-30T11:00:00Z",
+    });
+
+    const record = parseAntigravityLine(responseWithTokens, state);
+    expect(record).not.toBeNull();
+    expect(record?.provider).toBe("antigravity");
+    expect(record?.model).toBe("gemini-2.5-pro");
+    expect(record?.totals).toEqual({
+      uncachedInputTokens: 1500,
+      cachedInputTokens: 500,
+      cacheCreationTokens: 0,
+      outputTokens: 300,
+      reasoningTokens: 100,
+    });
+  });
+
+  it("ignores non-planner lines", () => {
+    const state = initialAntigravityScanState("session-xyz");
+    expect(
+      parseAntigravityLine(
+        JSON.stringify({ step_index: 2, source: "SYSTEM", type: "CONVERSATION_HISTORY" }),
+        state,
+      ),
+    ).toBeNull();
+    expect(parseAntigravityLine("invalid json", state)).toBeNull();
   });
 });

@@ -18,8 +18,10 @@ import * as NodeReadline from "node:readline";
 import type { UsageProviderKind } from "@t3tools/contracts";
 
 import {
+  initialAntigravityScanState,
   initialCodexScanState,
   mightCarryUsage,
+  parseAntigravityLine,
   parseClaudeLine,
   parseCodexLine,
   parseGrokLine,
@@ -119,6 +121,11 @@ export async function readTranscriptRecords(
 ): Promise<readonly UsageRecord[] | null> {
   const records: UsageRecord[] = [];
   const codexState = initialCodexScanState();
+  const antigravityState = initialAntigravityScanState();
+  const conversationIdMatch = filePath.match(/brain[/\\]([0-9a-fA-F-]+)[/\\]/);
+  if (conversationIdMatch?.[1]) {
+    antigravityState.sessionId = conversationIdMatch[1];
+  }
 
   try {
     const lines = NodeReadline.createInterface({
@@ -143,6 +150,13 @@ export async function readTranscriptRecords(
       if (provider === "grok") {
         if (!mightCarryUsage(line, provider)) continue;
         for (const grokRecord of parseGrokLine(line)) records.push(grokRecord);
+        continue;
+      }
+
+      if (provider === "antigravity") {
+        if (!mightCarryUsage(line, provider)) continue;
+        const record = parseAntigravityLine(line, antigravityState);
+        if (record !== null) records.push(record);
         continue;
       }
 

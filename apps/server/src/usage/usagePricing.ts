@@ -139,7 +139,26 @@ export function lookupRate(table: RateTable, model: string): ModelRate | null {
   const key = normalizeRateKey(model);
   const bareName = bareModelName(key);
   if (bareName.length === 0 || UNPRICEABLE_MODELS.has(bareName)) return null;
-  return table.get(key) ?? null;
+  const direct = table.get(key);
+  if (direct !== undefined) return direct;
+
+  // Only canonicalize Gemini names for bare / gemini-prefixed keys
+  if (!key.includes("/") || key.startsWith("gemini/")) {
+    const geminiMatch = bareName.match(/gemini[\s-]*([0-9.]+)(?:[\s-]+(flash|pro))?/i);
+    if (geminiMatch) {
+      const version = geminiMatch[1];
+      const tier = (geminiMatch[2] ?? "flash").toLowerCase();
+      const candidateSlug = `gemini-${version}-${tier}`;
+      const mapped = table.get(candidateSlug) ?? table.get(`gemini/${candidateSlug}`);
+      if (mapped !== undefined) return mapped;
+      // Fall back to latest equivalent flash/pro rate if point version not in table
+      const fallbackSlug = `gemini-2.5-${tier}`;
+      const fallbackRate = table.get(fallbackSlug) ?? table.get(`gemini/${fallbackSlug}`);
+      if (fallbackRate !== undefined) return fallbackRate;
+    }
+  }
+
+  return null;
 }
 
 export interface PricedUsage {

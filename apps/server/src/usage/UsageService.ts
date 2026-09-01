@@ -229,6 +229,13 @@ export const make = Effect.gen(function* () {
         ? path.resolve(expandHomePath(grokHomeEnv))
         : path.join(NodeOS.homedir(), ".grok");
 
+    const antigravityHomeEnv = hostEnvironment["ANTIGRAVITY_HOME"]?.trim() ?? "";
+    const antigravityHome =
+      antigravityHomeEnv.length > 0
+        ? path.resolve(expandHomePath(antigravityHomeEnv))
+        : path.join(NodeOS.homedir(), ".gemini", "antigravity-cli");
+    const antigravityBrainDir = path.join(antigravityHome, "brain");
+
     return [
       { provider: "claude" as const, dir: claudeDir },
       { provider: "codex" as const, dir: path.join(codexLayout.sharedHomePath, "sessions") },
@@ -236,6 +243,11 @@ export const make = Effect.gen(function* () {
         provider: "grok" as const,
         dir: path.join(grokHome, "sessions"),
         fileName: "updates.jsonl",
+      },
+      {
+        provider: "antigravity" as const,
+        dir: antigravityBrainDir,
+        fileName: "transcript.jsonl",
       },
     ];
   });

@@ -70,6 +70,15 @@ export function totalTokens(totals: UsageTokenTotals): number {
 export function mightCarryUsage(line: string, provider: UsageProviderKind): boolean {
   if (provider === "claude") return line.includes('"usage"');
   if (provider === "grok") return line.includes('"turn_completed"');
+  if (provider === "antigravity") {
+    return (
+      line.includes('"PLANNER_RESPONSE"') ||
+      line.includes('"USER_SETTINGS_CHANGE"') ||
+      line.includes('"Model Selection"') ||
+      line.includes('"token_usage"') ||
+      line.includes('"usage"')
+    );
+  }
   return line.includes('"token_count"');
 }
 
@@ -483,6 +492,117 @@ export function parseGrokLine(line: string): readonly UsageRecord[] {
     });
   }
   return results;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Google Antigravity                                                         */
+/* -------------------------------------------------------------------------- */
+
+export interface AntigravityScanState {
+  activeModel: string;
+  sessionId: string;
+}
+
+export function initialAntigravityScanState(fallbackSessionId = ""): AntigravityScanState {
+  return {
+    activeModel: "gemini-2.5-flash",
+    sessionId: fallbackSessionId,
+  };
+}
+
+/**
+ * Parses one line of an Antigravity transcript.jsonl log.
+ *
+ * Antigravity writes steps sequentially. Model changes appear in user input metadata,
+ * while assistant turns appear as `PLANNER_RESPONSE` steps from `MODEL`.
+ */
+export function parseAntigravityLine(
+  line: string,
+  state: AntigravityScanState,
+): UsageRecord | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const record = parsed as Record<string, unknown>;
+
+  // Detect model selection changes in user input
+  if (record["type"] === "USER_INPUT") {
+    const content = typeof record["content"] === "string" ? record["content"] : "";
+    const match = content.match(
+      /`Model Selection` from [^`\n]+ to ([^\n`]+?)(?:\.\s*No need|\.\n|\.$|\n|$)/i,
+    );
+    if (match?.[1]) {
+      state.activeModel = match[1].trim();
+    }
+    return null;
+  }
+
+  // Detect checkpoint sessionId / conversation log references
+  if (record["type"] === "CHECKPOINT") {
+    const content = typeof record["content"] === "string" ? record["content"] : "";
+    const sessionMatch = content.match(/brain[/\\]([0-9a-fA-F-]+)[/\\]/);
+    if (sessionMatch?.[1]) {
+      state.sessionId = sessionMatch[1];
+    }
+    return null;
+  }
+
+  // Only PLANNER_RESPONSE from MODEL represents assistant generation
+  if (record["type"] !== "PLANNER_RESPONSE" || record["source"] !== "MODEL") {
+    return null;
+  }
+
+  const timestampMs = parseTimestampMs(record["created_at"] ?? record["timestamp"]);
+  if (timestampMs === null) return null;
+
+  const stepIndex = typeof record["step_index"] === "number" ? record["step_index"] : 0;
+  const sessionId = state.sessionId;
+  const dedupeKey = sessionId ? `${sessionId}:${stepIndex}` : null;
+
+  // Check if explicit token usage is attached
+  const usage = record["usage"] ?? record["tokens"];
+  let totals: UsageTokenTotals;
+  if (typeof usage === "object" && usage !== null) {
+    const u = usage as Record<string, unknown>;
+    totals = {
+      uncachedInputTokens: int(u["input_tokens"] ?? u["prompt_tokens"] ?? u["inputTokens"]),
+      cachedInputTokens: int(
+        u["cached_tokens"] ?? u["cached_input_tokens"] ?? u["cachedInputTokens"],
+      ),
+      cacheCreationTokens: 0,
+      outputTokens: int(u["output_tokens"] ?? u["completion_tokens"] ?? u["outputTokens"]),
+      reasoningTokens: int(u["thinking_tokens"] ?? u["reasoning_tokens"] ?? u["reasoningTokens"]),
+    };
+  } else {
+    // Estimate tokens from content and thinking if raw counts were not preserved
+    const content = typeof record["content"] === "string" ? record["content"] : "";
+    const thinking = typeof record["thinking"] === "string" ? record["thinking"] : "";
+    const outputChars = content.length;
+    const thinkingChars = thinking.length;
+    const estimatedOutputTokens = Math.max(1, Math.ceil(outputChars / 4));
+    const estimatedThinkingTokens = Math.ceil(thinkingChars / 4);
+    totals = {
+      uncachedInputTokens: 0,
+      cachedInputTokens: 0,
+      cacheCreationTokens: 0,
+      outputTokens: estimatedOutputTokens + estimatedThinkingTokens,
+      reasoningTokens: estimatedThinkingTokens,
+    };
+  }
+
+  return {
+    provider: "antigravity",
+    timestampMs,
+    model: state.activeModel,
+    sessionId,
+    totals,
+    reportedCostUsd: null,
+    dedupeKey,
+  };
 }
 
 export { EMPTY_TOTALS };
