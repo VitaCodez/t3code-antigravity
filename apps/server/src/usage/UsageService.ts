@@ -15,6 +15,8 @@ import * as NodeOS from "node:os";
 
 import {
   USAGE_CONTRACT_VERSION,
+  type AntigravityQuotaGroup,
+  type AntigravityQuotaSummary,
   type UsageProviderKind,
   type UsageSource,
   type UsageSummary,
@@ -85,6 +87,73 @@ const encodeRatesCache = Schema.encodeEffect(
 
 /** The scan cache is narrowed by hand in `usageScanCache`, so JSON is enough here. */
 const ScanCacheJson = Schema.fromJsonString(Schema.Unknown as unknown as Schema.Codec<unknown>);
+
+let cachedAntigravityQuota: { data: AntigravityQuotaSummary; fetchedAtMs: number } | null = null;
+const ANTIGRAVITY_QUOTA_CACHE_TTL_MS = 60_000;
+
+function fetchAntigravityQuotaEffect(
+  nowMs: number,
+  nowIso: string,
+): Effect.Effect<AntigravityQuotaSummary | null, never> {
+  if (
+    cachedAntigravityQuota &&
+    nowMs - cachedAntigravityQuota.fetchedAtMs < ANTIGRAVITY_QUOTA_CACHE_TTL_MS
+  ) {
+    return Effect.succeed(cachedAntigravityQuota.data);
+  }
+
+  return Effect.tryPromise(async () => {
+    const cp = await import("node:child_process");
+    return new Promise<AntigravityQuotaSummary | null>((resolve) => {
+      cp.execFile(
+        "agy",
+        ["--output-format", "json", "--print=/quota"],
+        { timeout: 10000, windowsHide: true },
+        (err, stdout) => {
+          if (err || !stdout) {
+            resolve(cachedAntigravityQuota?.data ?? null);
+            return;
+          }
+          try {
+            const lines = stdout.trim().split("\n");
+            const jsonLine = lines.find((l) => l.startsWith("{") && l.endsWith("}")) ?? stdout;
+            const parsed = JSON.parse(jsonLine);
+            const rawGroups = parsed.command?.data?.groups;
+            if (!Array.isArray(rawGroups)) {
+              resolve(cachedAntigravityQuota?.data ?? null);
+              return;
+            }
+
+            const groups: AntigravityQuotaGroup[] = rawGroups.map((g: Record<string, unknown>) => ({
+              name: String(g["name"] ?? ""),
+              description: g["description"] ? String(g["description"]) : undefined,
+              buckets: (Array.isArray(g["buckets"]) ? g["buckets"] : []).map(
+                (b: Record<string, unknown>) => ({
+                  id: String(b["id"] ?? ""),
+                  name: String(b["name"] ?? ""),
+                  window: b["window"] === "5h" ? ("5h" as const) : ("weekly" as const),
+                  remainingFraction:
+                    typeof b["remaining_fraction"] === "number" ? b["remaining_fraction"] : 1,
+                  resetTime: String(b["reset_time"] ?? ""),
+                  description: b["description"] ? String(b["description"]) : undefined,
+                }),
+              ),
+            }));
+
+            const data: AntigravityQuotaSummary = {
+              groups,
+              fetchedAt: nowIso,
+            };
+            cachedAntigravityQuota = { data, fetchedAtMs: nowMs };
+            resolve(data);
+          } catch {
+            resolve(cachedAntigravityQuota?.data ?? null);
+          }
+        },
+      );
+    });
+  }).pipe(Effect.catchCause(() => Effect.succeed(cachedAntigravityQuota?.data ?? null)));
+}
 const decodeScanCacheFile = Schema.decodeUnknownEffect(ScanCacheJson);
 const encodeScanCacheFile = Schema.encodeEffect(ScanCacheJson);
 
@@ -449,6 +518,10 @@ export const make = Effect.gen(function* () {
     const aggregated = aggregator.finish();
     const readAt = yield* DateTime.now;
     const finishedAtMs = yield* Clock.currentTimeMillis;
+    const antigravityQuota = yield* fetchAntigravityQuotaEffect(
+      finishedAtMs,
+      DateTime.formatIso(readAt),
+    );
 
     return {
       contractVersion: USAGE_CONTRACT_VERSION,
@@ -467,6 +540,7 @@ export const make = Effect.gen(function* () {
             : DateTime.formatIso(DateTime.makeUnsafe(ratesFetchedAtMs)),
         knownModels: rates.size,
       },
+      antigravityQuota,
       scanDurationMs: Math.max(0, finishedAtMs - startedAtMs),
     } satisfies UsageSummary;
   });

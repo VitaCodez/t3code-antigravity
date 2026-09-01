@@ -188,6 +188,29 @@ export const UsageSummaryInput = Schema.Struct({
 });
 export type UsageSummaryInput = typeof UsageSummaryInput.Type;
 
+export const AntigravityQuotaBucket = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  window: Schema.Literals(["5h", "weekly"]),
+  remainingFraction: Schema.Number,
+  resetTime: Schema.String,
+  description: Schema.optional(Schema.String),
+});
+export type AntigravityQuotaBucket = typeof AntigravityQuotaBucket.Type;
+
+export const AntigravityQuotaGroup = Schema.Struct({
+  name: Schema.String,
+  description: Schema.optional(Schema.String),
+  buckets: Schema.Array(AntigravityQuotaBucket),
+});
+export type AntigravityQuotaGroup = typeof AntigravityQuotaGroup.Type;
+
+export const AntigravityQuotaSummary = Schema.Struct({
+  groups: Schema.Array(AntigravityQuotaGroup),
+  fetchedAt: Schema.String,
+});
+export type AntigravityQuotaSummary = typeof AntigravityQuotaSummary.Type;
+
 export const UsageSummary = Schema.Struct({
   contractVersion: Schema.Number,
   readAt: Schema.String,
@@ -197,6 +220,7 @@ export const UsageSummary = Schema.Struct({
   buckets: Schema.Array(UsageBucket),
   sources: Schema.Array(UsageSource),
   pricing: UsagePricing,
+  antigravityQuota: Schema.optional(Schema.NullOr(AntigravityQuotaSummary)),
   /** Wall-clock cost of the scan, surfaced in diagnostics. */
   scanDurationMs: NonNegativeInt,
 });

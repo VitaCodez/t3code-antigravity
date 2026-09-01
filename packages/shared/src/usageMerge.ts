@@ -8,6 +8,7 @@
  */
 import {
   USAGE_MERGE_COMPATIBLE_SINCE,
+  type AntigravityQuotaSummary,
   type EnvironmentId,
   type UsageBucket,
   type UsageProviderKind,
@@ -77,6 +78,7 @@ export interface MergedUsage {
   readonly daily: readonly DailyTotals[];
   readonly hourly: readonly HourlyTotals[];
   readonly costQuality: CostQuality;
+  readonly antigravityQuota?: AntigravityQuotaSummary | null;
   /** Environments whose data was dropped as a duplicate of another's. */
   readonly duplicateSources: readonly string[];
   readonly contributingEnvironments: readonly EnvironmentId[];
@@ -197,6 +199,7 @@ const EMPTY_MERGED: MergedUsage = {
     unpricedShare: 0,
     cacheSavingsUsd: 0,
   },
+  antigravityQuota: null,
   duplicateSources: [],
   contributingEnvironments: [],
   staleEnvironments: [],
@@ -396,6 +399,9 @@ export function mergeUsage(
     a.hourStart.localeCompare(b.hourStart),
   );
 
+  const antigravityQuota =
+    current.map((e) => e.summary.antigravityQuota).find((q) => q != null) ?? null;
+
   return {
     costUsd,
     uncachedInputTokens,
@@ -417,6 +423,7 @@ export function mergeUsage(
         records === 0 ? 0 : (records - providerReportedRecords - unpricedRecords) / records,
       cacheSavingsUsd,
     },
+    antigravityQuota,
     duplicateSources: duplicates,
     contributingEnvironments,
     staleEnvironments,

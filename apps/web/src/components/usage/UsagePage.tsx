@@ -31,6 +31,7 @@ import {
 } from "../WorkspaceBreadcrumb";
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
+import { AntigravityQuotaSection } from "./AntigravityQuotaSection";
 import { UsageProviderChart, type UsageChartMetric } from "./UsageProviderChart";
 import { PROVIDER_ORDER, PROVIDER_PRESENTATION, providersWithUsage } from "./usageProviders";
 
@@ -220,6 +221,10 @@ export function UsagePage() {
                   duplicateSources={merged.duplicateSources}
                   staleEnvironments={merged.staleEnvironments}
                 />
+
+                {merged.antigravityQuota ? (
+                  <AntigravityQuotaSection quota={merged.antigravityQuota} className="mb-6" />
+                ) : null}
 
                 <section className="grid gap-6 lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
                   <div className="flex min-w-0 flex-col gap-5">
