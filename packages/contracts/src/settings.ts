@@ -727,56 +727,6 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
 );
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;
 
-export const AntigravitySettings = makeProviderSettingsSchema(
-  {
-    enabled: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(true)),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    binaryPath: makeBinaryPathSetting("agy").pipe(
-      Schema.annotateKey({
-        title: "Binary path",
-        description: "Path to the Antigravity CLI (agy) binary.",
-        providerSettingsForm: { placeholder: "agy", clearWhenEmpty: "omit" },
-      }),
-    ),
-    customModels: Schema.Array(Schema.String).pipe(
-      Schema.withDecodingDefault(Effect.succeed([])),
-      Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
-    ),
-    launchArgs: Schema.String.pipe(
-      Schema.withDecodingDefault(Effect.succeed("")),
-      Schema.annotateKey({
-        title: "Launch arguments",
-        description: "Additional CLI arguments passed to agy on session start.",
-        providerSettingsForm: {
-          placeholder: "e.g. --effort high",
-          clearWhenEmpty: "omit",
-        },
-      }),
-    ),
-    usePythonSdk: Schema.Boolean.pipe(
-      Schema.withDecodingDefault(Effect.succeed(false)),
-      Schema.annotateKey({
-        title: "Use Python SDK",
-        description: "Run via google-antigravity Python SDK bridge instead of direct agy CLI.",
-        providerSettingsForm: { clearWhenEmpty: "omit" },
-      }),
-    ),
-    pythonPath: makeBinaryPathSetting("python").pipe(
-      Schema.annotateKey({
-        title: "Python path",
-        description: "Path to the python executable with google-antigravity installed.",
-        providerSettingsForm: { placeholder: "python", clearWhenEmpty: "omit" },
-      }),
-    ),
-  },
-  {
-    order: ["binaryPath", "usePythonSdk", "pythonPath", "launchArgs"],
-  },
-);
-export type AntigravitySettings = typeof AntigravitySettings.Type;
-
 export const ObservabilitySettings = Schema.Struct({
   otlpTracesUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
   otlpMetricsUrl: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
@@ -1106,15 +1056,6 @@ const OpenCodeSettingsPatch = Schema.Struct({
   serverUrl: Schema.optionalKey(TrimmedString),
   serverPassword: Schema.optionalKey(TrimmedString),
   customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-});
-
-const AntigravitySettingsPatch = Schema.Struct({
-  enabled: Schema.optionalKey(Schema.Boolean),
-  binaryPath: Schema.optionalKey(TrimmedString),
-  usePythonSdk: Schema.optionalKey(Schema.Boolean),
-  pythonPath: Schema.optionalKey(TrimmedString),
-  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
-  launchArgs: Schema.optionalKey(TrimmedString),
 });
 
 export const ServerSettingsPatch = Schema.Struct({
