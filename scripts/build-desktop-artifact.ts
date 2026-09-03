@@ -1,9 +1,17 @@
 #!/usr/bin/env node
 // @effect-diagnostics nodeBuiltinImport:off - Node's typed junction API avoids Windows symlink privileges while keeping the probe isolated.
 
+import * as NodePath from "node:path";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeCrypto from "node:crypto";
 import * as NodeModule from "node:module";
+
+if (process.platform === "win32") {
+  const localBin = NodePath.resolve(import.meta.dirname, "../node_modules/.bin");
+  if (!process.env.PATH?.includes(localBin)) {
+    process.env.PATH = `${localBin}${NodePath.delimiter}${process.env.PATH ?? ""}`;
+  }
+}
 
 import {
   createPackageWithOptions,
