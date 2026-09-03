@@ -1,5 +1,4 @@
 import {
-  type ProviderDriverKind,
   type ProviderInstanceId,
   type ServerProvider,
   ServerProvider as ServerProviderSchema,
@@ -21,13 +20,31 @@ const mergeProviderModels = (
   cachedModels: ReadonlyArray<ServerProvider["models"][number]>,
 ): ReadonlyArray<ServerProvider["models"][number]> => {
   const fallbackSlugs = new Set(fallbackModels.map((model) => model.slug));
-  // Cached custom models never resurrect through hydration: custom models are
-  // settings-owned for every driver in this build, so a settings deletion must
-  // win over the cache even before the next successful probe lands.
+  // The fallback snapshot is built from current settings and already carries
+  // every custom model, so cached custom rows that are not in it were removed
+  // while the cache was stale and must not come back.
   return [
     ...fallbackModels,
     ...cachedModels.filter((model) => !model.isCustom && !fallbackSlugs.has(model.slug)),
   ];
+};
+
+/**
+ * Built-in drivers in presentation order. Codex and Claude lead, the opt-in
+ * providers follow, and unknown or fork drivers sort after every built-in.
+ */
+const BUILT_IN_DRIVER_ORDER: ReadonlyArray<string> = [
+  "codex",
+  "claudeAgent",
+  "cursor",
+  "grok",
+  "opencode",
+  "antigravity",
+];
+
+const driverRank = (driver: string): number => {
+  const index = BUILT_IN_DRIVER_ORDER.indexOf(driver);
+  return index === -1 ? BUILT_IN_DRIVER_ORDER.length : index;
 };
 
 export const orderProviderSnapshots = (
@@ -35,8 +52,9 @@ export const orderProviderSnapshots = (
 ): ReadonlyArray<ServerProvider> =>
   [...providers].toSorted(
     (left, right) =>
-      (left.displayName ?? "").localeCompare(right.displayName ?? "") ||
+      driverRank(left.driver) - driverRank(right.driver) ||
       left.driver.localeCompare(right.driver) ||
+      (left.displayName ?? "").localeCompare(right.displayName ?? "") ||
       left.instanceId.localeCompare(right.instanceId),
   );
 
@@ -103,23 +121,6 @@ export const resolveProviderStatusCachePath = Effect.fn("resolveProviderStatusCa
     return path.join(input.cacheDir, `${input.instanceId}.json`);
   },
 );
-
-/**
- * Legacy kind-keyed path resolver retained for callers that still think in
- * terms of `ProviderDriverKind`. Prefer `resolveProviderStatusCachePath` with an
- * `instanceId`; new code should route through the instance registry.
- *
- * @deprecated use `resolveProviderStatusCachePath` with an instance id.
- */
-export const resolveLegacyProviderStatusCachePath = Effect.fn(
-  "resolveLegacyProviderStatusCachePath",
-)(function* (input: {
-  readonly cacheDir: string;
-  readonly provider: ProviderDriverKind;
-}): Effect.fn.Return<string, never, Path.Path> {
-  const path = yield* Path.Path;
-  return path.join(input.cacheDir, `${input.provider}.json`);
-});
 
 export const readProviderStatusCache = (filePath: string) =>
   Effect.gen(function* () {

@@ -182,42 +182,32 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
     );
   });
 
-  it("does not resurrect deleted custom models from cache when not in fallback models", () => {
-    const cachedProvider = makeProvider(CODEX_DRIVER, {
+  it("does not resurrect cached custom models that settings no longer declare", () => {
+    const builtIn = {
+      slug: "gpt-5.4",
+      name: "GPT-5.4",
+      isCustom: false,
+      capabilities: emptyCapabilities,
+    } as const;
+    const cachedCodex = makeProvider(CODEX_DRIVER, {
       models: [
+        builtIn,
         {
-          slug: "deleted-custom-model",
-          name: "deleted-custom-model",
+          slug: "removed-custom",
+          name: "removed-custom",
           isCustom: true,
           capabilities: emptyCapabilities,
         },
-        {
-          slug: "dynamically-discovered-model",
-          name: "Dynamically Discovered Model",
-          isCustom: false,
-          capabilities: emptyCapabilities,
-        },
       ],
     });
-    const fallbackProvider = makeProvider(CODEX_DRIVER, {
-      models: [
-        {
-          slug: "gpt-5.4",
-          name: "GPT-5.4",
-          isCustom: false,
-          capabilities: emptyCapabilities,
-        },
-      ],
-    });
-
-    const hydrated = hydrateCachedProvider({
-      cachedProvider,
-      fallbackProvider,
-    });
+    const fallbackCodex = makeProvider(CODEX_DRIVER, { models: [builtIn] });
 
     assert.deepStrictEqual(
-      hydrated.models.map((m) => m.slug),
-      ["gpt-5.4", "dynamically-discovered-model"],
+      hydrateCachedProvider({
+        cachedProvider: cachedCodex,
+        fallbackProvider: fallbackCodex,
+      }).models,
+      [builtIn],
     );
   });
 
