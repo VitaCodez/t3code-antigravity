@@ -166,7 +166,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
   const checkProvider = Effect.fn("checkAntigravityProvider")(function* () {
     if (!settings.enabled) return yield* getSnapshot;
     const before = yield* SubscriptionRef.get(metadata);
-    const result = yield* options.probe.pipe(Effect.timeoutOption("15 seconds"), Effect.result);
+    const result = yield* options.probe.pipe(Effect.timeoutOption("60 seconds"), Effect.result);
     const initialized =
       Result.isSuccess(result) && Option.isSome(result.success) ? result.success.value : undefined;
     const failure = Result.isFailure(result) ? result.failure : undefined;
@@ -180,7 +180,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             ? "Antigravity is not installed or its executable could not be found."
             : failure
               ? "Antigravity could not complete its local health check."
-              : "Antigravity did not respond to its local health check within 15 seconds.";
+              : "Antigravity did not respond to its local health check within 60 seconds.";
     const supportsTextGeneration =
       initialized !== undefined ? yield* options.supportsTextGeneration : false;
     const updatedAt = DateTime.formatIso(yield* DateTime.now);
