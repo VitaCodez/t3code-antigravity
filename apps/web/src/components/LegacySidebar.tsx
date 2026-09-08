@@ -3023,7 +3023,6 @@ function SidebarConversationsSection({
               <SidebarThreadRow
                 key={threadKey}
                 thread={thread}
-                projectCwd=""
                 orderedProjectThreadKeys={orderedThreadKeys}
                 isActive={routeThreadKey === threadKey}
                 jumpLabel={threadJumpLabelByKey.get(threadKey) ?? null}
