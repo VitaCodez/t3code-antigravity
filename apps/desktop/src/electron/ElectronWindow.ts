@@ -58,8 +58,6 @@ export class ElectronWindowCreateError extends Schema.TaggedErrorClass<ElectronW
   }
 }
 
-export const isElectronWindowCreateError = Schema.is(ElectronWindowCreateError);
-
 export class ElectronWindowOperationError extends Schema.TaggedErrorClass<ElectronWindowOperationError>()(
   "ElectronWindowOperationError",
   {
@@ -97,6 +95,7 @@ export class ElectronWindow extends Context.Service<
   }
 >()("@t3tools/desktop/electron/ElectronWindow") {}
 
+/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;
   const mainWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
