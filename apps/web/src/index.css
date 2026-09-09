@@ -2270,6 +2270,23 @@ html[data-wallpaper-active="true"] [data-slot="select-popup"] {
   -webkit-backdrop-filter: blur(16px);
 }
 
+/* Timeline minimap prompt picker readability over wallpaper */
+html[data-wallpaper-active="true"] [data-testid="timeline-minimap"] [data-minimap-strip] {
+  background-color: color-mix(in srgb, var(--foreground) 50%, transparent);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 80%);
+}
+
+html[data-wallpaper-active="true"]
+  [data-testid="timeline-minimap"]
+  [data-minimap-strip][data-in-view="true"] {
+  background-color: var(--primary, var(--foreground)) !important;
+  box-shadow: 0 0 8px var(--primary, var(--foreground));
+}
+
+html[data-wallpaper-active="true"] [data-testid="timeline-minimap"] .bg-border\/15 {
+  background-color: color-mix(in srgb, var(--border) 60%, transparent) !important;
+}
+
 /* Tip 2: Retro / Pixel font styles */
 html[data-retro-font="press-start"] {
   --font-mono: "Press Start 2P", monospace !important;
