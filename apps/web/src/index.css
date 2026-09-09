@@ -2064,28 +2064,47 @@ code {
 }
 
 /* Wallpaper customization & Atmospheric Glassmorphism */
-html[data-wallpaper-active="true"] body {
+html[data-wallpaper-active="true"],
+html[data-wallpaper-active="true"] body,
+html[data-wallpaper-active="true"] #root,
+html[data-wallpaper-active="true"] [data-slot="sidebar-wrapper"] {
   background-color: transparent !important;
 }
 
-html[data-wallpaper-active="true"] [data-app-sidebar] {
-  background-color: color-mix(in srgb, var(--sidebar) var(--glass-opacity), transparent) !important;
+/* Sidebar with frosted glass */
+html[data-wallpaper-active="true"] [data-app-sidebar],
+html[data-wallpaper-active="true"] [data-slot="sidebar-inner"] {
+  background-color: color-mix(in srgb, var(--sidebar) 75%, transparent) !important;
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
 }
 
+/* SidebarInset transparent so wallpaper shows behind workspace */
 html[data-wallpaper-active="true"] [data-slot="sidebar-inset"] {
-  background-color: color-mix(
-    in srgb,
-    var(--background) var(--glass-opacity),
-    transparent
-  ) !important;
-  backdrop-filter: blur(calc(var(--glass-blur) * 0.4)) saturate(var(--glass-saturation));
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.4)) saturate(var(--glass-saturation));
+  background-color: transparent !important;
+  background-image: none !important;
 }
 
 html[data-wallpaper-active="true"] [data-slot="sidebar-inset"] main {
   background-color: transparent !important;
+}
+
+/* Chat view root and workspace drop target containers */
+html[data-wallpaper-active="true"] [data-slot="sidebar-inset"] > div,
+html[data-wallpaper-active="true"] [data-chat-workspace-drop-target] {
+  background-color: transparent !important;
+}
+
+/* Workspace header with translucent glass tint */
+html[data-wallpaper-active="true"] [data-chat-header] {
+  background-color: color-mix(in srgb, var(--background) 55%, transparent) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Draft hero state / welcome headline readability over wallpaper */
+html[data-wallpaper-active="true"] [data-chat-composer-overlay] h1 {
+  text-shadow: 0 2px 14px rgb(0 0 0 / 80%);
 }
 
 /* Tip 2: Retro / Pixel font styles */
