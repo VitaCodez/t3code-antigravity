@@ -48,14 +48,22 @@ export function WallpaperBackdrop() {
         }}
       />
 
-      {/* Ambient dark vignette & readability gradients */}
+      {/* Base legibility scrim layer across the whole background */}
       <div
-        className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20"
-        style={{ opacity: 0.4 + dimmingFactor * 0.55 }}
+        className="absolute inset-0 bg-black/40"
+        style={{ opacity: 0.45 + dimmingFactor * 0.45 }}
       />
+
+      {/* Ambient dark vignette & vertical contrast gradient */}
       <div
-        className="absolute inset-0 bg-radial-[circle_at_center] from-transparent via-black/25 to-black/75"
-        style={{ opacity: 0.35 + dimmingFactor * 0.5 }}
+        className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/55 to-black/35"
+        style={{ opacity: 0.55 + dimmingFactor * 0.4 }}
+      />
+
+      {/* Center readability focus scrim so reading area maintains contrast against bright neon signs */}
+      <div
+        className="absolute inset-0 bg-radial-[circle_at_center] from-black/35 via-black/50 to-black/80"
+        style={{ opacity: 0.5 + dimmingFactor * 0.5 }}
       />
     </div>
   );
