@@ -59,8 +59,11 @@ export function WallpaperSettingsSection() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 10 * 1024 * 1024) {
-      alert("Image is too large. Please select an image under 10MB.");
+    // High-resolution 4K and 8K wallpapers can easily exceed 10MB.
+    // Allow large wallpapers up to 100MB.
+    const maxBytes = 100 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      alert("Image is too large. Please select an image under 100MB.");
       return;
     }
 
@@ -230,7 +233,8 @@ export function WallpaperSettingsSection() {
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Paste an online image URL or upload any PNG, JPG, WebP, or GIF from your device.
+              Paste an online image URL or upload any PNG, JPG, WebP, or GIF from your device
+              (high-res up to 100MB supported).
             </p>
           )}
         </div>
