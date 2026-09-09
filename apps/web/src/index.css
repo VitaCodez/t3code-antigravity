@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&family=VT323&display=swap");
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 
@@ -2060,4 +2061,54 @@ code {
 }
 .chat-markdown .katex-display > .katex {
   font-size: 1.85em !important;
+}
+
+/* Wallpaper customization & Atmospheric Glassmorphism */
+html[data-wallpaper-active="true"] body {
+  background-color: transparent !important;
+}
+
+html[data-wallpaper-active="true"] [data-app-sidebar] {
+  background-color: color-mix(in srgb, var(--sidebar) var(--glass-opacity), transparent) !important;
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturation));
+}
+
+html[data-wallpaper-active="true"] [data-slot="sidebar-inset"] {
+  background-color: color-mix(
+    in srgb,
+    var(--background) var(--glass-opacity),
+    transparent
+  ) !important;
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.4)) saturate(var(--glass-saturation));
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.4)) saturate(var(--glass-saturation));
+}
+
+html[data-wallpaper-active="true"] [data-slot="sidebar-inset"] main {
+  background-color: transparent !important;
+}
+
+/* Tip 2: Retro / Pixel font styles */
+html[data-retro-font="press-start"] {
+  --font-mono: "Press Start 2P", monospace !important;
+  --font-composer: "Press Start 2P", monospace !important;
+  --font-terminal: "Press Start 2P", monospace !important;
+}
+
+html[data-retro-font="vt323"] {
+  --font-mono: "VT323", monospace !important;
+  --font-composer: "VT323", monospace !important;
+  --font-terminal: "VT323", monospace !important;
+}
+
+html[data-retro-font="silkscreen"] {
+  --font-mono: "Silkscreen", monospace !important;
+  --font-composer: "Silkscreen", monospace !important;
+  --font-terminal: "Silkscreen", monospace !important;
+}
+
+html[data-retro-font="retro-code"] {
+  --font-mono: "Fixedsys", "Courier New", "Courier Prime", monospace !important;
+  --font-composer: "Fixedsys", "Courier New", "Courier Prime", monospace !important;
+  --font-terminal: "Fixedsys", "Courier New", "Courier Prime", monospace !important;
 }

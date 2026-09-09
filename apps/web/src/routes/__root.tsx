@@ -36,6 +36,7 @@ import {
 } from "../components/ui/toast";
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { applyAppearanceFontVariables } from "~/appearanceFonts";
+import { RETRO_FONT_DEFINITIONS, resolveWallpaperAccent } from "~/wallpaper";
 import { applyAppearanceContrast } from "~/appearanceContrast";
 import { useClientSettings } from "../hooks/useSettings";
 import { PlanAgentSelectionHeal } from "../planAgentSelectionHeal";
@@ -135,6 +136,8 @@ function RootRouteView() {
           <EnvironmentThemeSync />
           <GlassAppearanceSync />
           <FontAppearanceSync />
+          <WallpaperAppearanceSync />
+          <RetroFontAppearanceSync />
           <CommandPalette>
             <AppSidebarLayout>
               <Outlet />
@@ -174,6 +177,8 @@ function RootRouteView() {
         <EnvironmentThemeSync />
         <GlassAppearanceSync />
         <FontAppearanceSync />
+        <WallpaperAppearanceSync />
+        <RetroFontAppearanceSync />
         <FirstRunGate
           enabled={primaryEnvironmentAuthenticated}
           hostedStatic={authGateState.status === "hosted-static"}
@@ -226,6 +231,64 @@ function GlassAppearanceSync() {
   useEffect(() => {
     document.documentElement.style.setProperty("--glass-opacity", `${glassOpacity}%`);
   }, [glassOpacity]);
+
+  return null;
+}
+
+function WallpaperAppearanceSync() {
+  const wallpaperMode = useClientSettings((settings) => settings.wallpaperMode);
+  const wallpaperPreset = useClientSettings((settings) => settings.wallpaperPreset);
+  const wallpaperAutoAccent = useClientSettings((settings) => settings.wallpaperAutoAccent);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (wallpaperMode === "none") {
+      delete root.dataset.wallpaperActive;
+      root.style.removeProperty("--wallpaper-accent");
+      root.style.removeProperty("--primary");
+      root.style.removeProperty("--ring");
+      root.style.removeProperty("--focus");
+      return;
+    }
+
+    root.dataset.wallpaperActive = "true";
+
+    if (wallpaperAutoAccent) {
+      const accent = resolveWallpaperAccent(wallpaperMode, wallpaperPreset);
+      root.style.setProperty("--wallpaper-accent", accent);
+      root.style.setProperty("--primary", accent);
+      root.style.setProperty("--ring", accent);
+      root.style.setProperty("--focus", accent);
+    } else {
+      root.style.removeProperty("--wallpaper-accent");
+      root.style.removeProperty("--primary");
+      root.style.removeProperty("--ring");
+      root.style.removeProperty("--focus");
+    }
+  }, [wallpaperMode, wallpaperPreset, wallpaperAutoAccent]);
+
+  return null;
+}
+
+function RetroFontAppearanceSync() {
+  const retroFontPreset = useClientSettings((settings) => settings.retroFontPreset);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (retroFontPreset === "none") {
+      delete root.dataset.retroFont;
+      root.style.removeProperty("--retro-font-family");
+      return;
+    }
+
+    root.dataset.retroFont = retroFontPreset;
+    const def = RETRO_FONT_DEFINITIONS[retroFontPreset];
+    if (def?.family) {
+      root.style.setProperty("--retro-font-family", def.family);
+      root.style.setProperty("--font-mono", def.family);
+      root.style.setProperty("--font-composer", def.family);
+    }
+  }, [retroFontPreset]);
 
   return null;
 }

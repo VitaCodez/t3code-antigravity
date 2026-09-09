@@ -88,6 +88,54 @@ export const GlassOpacity = Schema.Int.check(
 export type GlassOpacity = typeof GlassOpacity.Type;
 const DEFAULT_GLASS_OPACITY: GlassOpacity = 80;
 
+export const WallpaperMode = Schema.Literals(["none", "preset", "custom"]);
+export type WallpaperMode = typeof WallpaperMode.Type;
+export const DEFAULT_WALLPAPER_MODE: WallpaperMode = "none";
+
+export const WALLPAPER_PRESETS = [
+  "cyberpunk-kowloon",
+  "synthwave-sunset",
+  "lofi-rain",
+  "matrix-code",
+  "deep-space",
+] as const;
+export const WallpaperPreset = Schema.Literals(WALLPAPER_PRESETS);
+export type WallpaperPreset = typeof WallpaperPreset.Type;
+export const DEFAULT_WALLPAPER_PRESET: WallpaperPreset = "cyberpunk-kowloon";
+
+export const MIN_WALLPAPER_OPACITY = 10;
+export const MAX_WALLPAPER_OPACITY = 100;
+export const WallpaperOpacity = Schema.Int.check(
+  Schema.isBetween({
+    minimum: MIN_WALLPAPER_OPACITY,
+    maximum: MAX_WALLPAPER_OPACITY,
+  }),
+);
+export type WallpaperOpacity = typeof WallpaperOpacity.Type;
+export const DEFAULT_WALLPAPER_OPACITY: WallpaperOpacity = 70;
+
+export const MIN_WALLPAPER_BLUR = 0;
+export const MAX_WALLPAPER_BLUR = 20;
+export const WallpaperBlur = Schema.Int.check(
+  Schema.isBetween({
+    minimum: MIN_WALLPAPER_BLUR,
+    maximum: MAX_WALLPAPER_BLUR,
+  }),
+);
+export type WallpaperBlur = typeof WallpaperBlur.Type;
+export const DEFAULT_WALLPAPER_BLUR: WallpaperBlur = 0;
+
+export const RETRO_FONT_PRESETS = [
+  "none",
+  "vt323",
+  "press-start",
+  "silkscreen",
+  "retro-code",
+] as const;
+export const RetroFontPreset = Schema.Literals(RETRO_FONT_PRESETS);
+export type RetroFontPreset = typeof RetroFontPreset.Type;
+export const DEFAULT_RETRO_FONT_PRESET: RetroFontPreset = "none";
+
 export const MIN_APPEARANCE_CONTRAST = 50;
 export const MAX_APPEARANCE_CONTRAST = 200;
 export const AppearanceContrast = Schema.Int.check(
@@ -278,6 +326,24 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   glassOpacity: GlassOpacity.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_GLASS_OPACITY)),
+  ),
+  wallpaperMode: WallpaperMode.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_WALLPAPER_MODE)),
+  ),
+  wallpaperPreset: WallpaperPreset.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_WALLPAPER_PRESET)),
+  ),
+  wallpaperCustomUrl: Schema.String.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+  wallpaperOpacity: WallpaperOpacity.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_WALLPAPER_OPACITY)),
+  ),
+  wallpaperBlur: WallpaperBlur.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_WALLPAPER_BLUR)),
+  ),
+  wallpaperPixelated: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  wallpaperAutoAccent: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  retroFontPreset: RetroFontPreset.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_RETRO_FONT_PRESET)),
   ),
   fontSizeInterface: InterfaceFontSize.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_INTERFACE_FONT_SIZE)),
@@ -1236,6 +1302,14 @@ export const ClientSettingsPatch = Schema.Struct({
   diffLayout: Schema.optionalKey(DiffLayout),
   environmentIdentificationMode: Schema.optionalKey(EnvironmentIdentificationMode),
   glassOpacity: Schema.optionalKey(GlassOpacity),
+  wallpaperMode: Schema.optionalKey(WallpaperMode),
+  wallpaperPreset: Schema.optionalKey(WallpaperPreset),
+  wallpaperCustomUrl: Schema.optionalKey(Schema.String),
+  wallpaperOpacity: Schema.optionalKey(WallpaperOpacity),
+  wallpaperBlur: Schema.optionalKey(WallpaperBlur),
+  wallpaperPixelated: Schema.optionalKey(Schema.Boolean),
+  wallpaperAutoAccent: Schema.optionalKey(Schema.Boolean),
+  retroFontPreset: Schema.optionalKey(RetroFontPreset),
   onboardingCompletedAt: Schema.optionalKey(Schema.NullOr(Schema.String)),
   fontSizeInterface: Schema.optionalKey(InterfaceFontSize),
   fontSizePrompt: Schema.optionalKey(PromptFontSize),

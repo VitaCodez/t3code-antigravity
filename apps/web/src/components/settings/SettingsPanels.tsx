@@ -132,6 +132,7 @@ import { Switch } from "../ui/switch";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { ThemeLibrary } from "./ThemeSettings";
+import { WallpaperSettingsSection } from "./WallpaperSettingsSection";
 import {
   backgroundActivityOverrideSettings,
   backgroundActivitySharedPolicySettings,
@@ -1099,6 +1100,8 @@ export function AppearanceSettingsPanel() {
           />
         </div>
       </SettingsSection>
+
+      <WallpaperSettingsSection />
 
       <SettingsSection id="appearance-interface" title="Interface">
         <SettingsRow

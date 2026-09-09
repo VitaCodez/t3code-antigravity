@@ -237,6 +237,53 @@ describe("ClientSettings glass opacity", () => {
   });
 });
 
+describe("ClientSettings wallpaper settings", () => {
+  it("defaults to disabled wallpaper with cyberpunk kowloon preset", () => {
+    const settings = decodeClientSettings({});
+    expect(settings.wallpaperMode).toBe("none");
+    expect(settings.wallpaperPreset).toBe("cyberpunk-kowloon");
+    expect(settings.wallpaperCustomUrl).toBe("");
+    expect(settings.wallpaperOpacity).toBe(70);
+    expect(settings.wallpaperBlur).toBe(0);
+    expect(settings.wallpaperPixelated).toBe(false);
+    expect(settings.wallpaperAutoAccent).toBe(true);
+    expect(settings.retroFontPreset).toBe("none");
+  });
+
+  it.each(["none", "preset", "custom"])("accepts supported wallpaper modes: %s", (mode) => {
+    expect(decodeClientSettings({ wallpaperMode: mode }).wallpaperMode).toBe(mode);
+    expect(decodeClientSettingsPatch({ wallpaperMode: mode }).wallpaperMode).toBe(mode);
+  });
+
+  it.each([10, 50, 70, 100])("accepts wallpaper opacity within range: %s", (value) => {
+    expect(decodeClientSettings({ wallpaperOpacity: value }).wallpaperOpacity).toBe(value);
+    expect(decodeClientSettingsPatch({ wallpaperOpacity: value }).wallpaperOpacity).toBe(value);
+  });
+
+  it.each([9, 101, 55.5])("rejects invalid wallpaper opacity: %s", (value) => {
+    expect(() => decodeClientSettings({ wallpaperOpacity: value })).toThrow();
+    expect(() => decodeClientSettingsPatch({ wallpaperOpacity: value })).toThrow();
+  });
+
+  it.each([0, 10, 20])("accepts wallpaper blur within range: %s", (value) => {
+    expect(decodeClientSettings({ wallpaperBlur: value }).wallpaperBlur).toBe(value);
+    expect(decodeClientSettingsPatch({ wallpaperBlur: value }).wallpaperBlur).toBe(value);
+  });
+
+  it.each([-1, 21])("rejects invalid wallpaper blur: %s", (value) => {
+    expect(() => decodeClientSettings({ wallpaperBlur: value })).toThrow();
+    expect(() => decodeClientSettingsPatch({ wallpaperBlur: value })).toThrow();
+  });
+
+  it.each(["none", "vt323", "press-start", "silkscreen", "retro-code"])(
+    "accepts supported retro font preset: %s",
+    (preset) => {
+      expect(decodeClientSettings({ retroFontPreset: preset }).retroFontPreset).toBe(preset);
+      expect(decodeClientSettingsPatch({ retroFontPreset: preset }).retroFontPreset).toBe(preset);
+    },
+  );
+});
+
 describe("ClientSettings appearance contrast", () => {
   it("defaults to the theme's original contrast", () => {
     expect(decodeClientSettings({}).appearanceContrast).toBe(100);
