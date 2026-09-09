@@ -3,8 +3,10 @@ import { useRef } from "react";
 import {
   DEFAULT_UNIFIED_SETTINGS,
   MAX_WALLPAPER_BLUR,
+  MAX_WALLPAPER_MESSAGE_OPACITY,
   MAX_WALLPAPER_OPACITY,
   MIN_WALLPAPER_BLUR,
+  MIN_WALLPAPER_MESSAGE_OPACITY,
   MIN_WALLPAPER_OPACITY,
   type RetroFontPreset,
 } from "@t3tools/contracts";
@@ -34,6 +36,7 @@ export function WallpaperSettingsSection() {
     wallpaperCustomUrl,
     wallpaperOpacity,
     wallpaperBlur,
+    wallpaperMessageOpacity,
     wallpaperPixelated,
     wallpaperAutoAccent,
     retroFontPreset,
@@ -50,6 +53,14 @@ export function WallpaperSettingsSection() {
 
   const blurRatio =
     (wallpaperBlur - MIN_WALLPAPER_BLUR) / (MAX_WALLPAPER_BLUR - MIN_WALLPAPER_BLUR);
+  const messageOpacityRatio =
+    (wallpaperMessageOpacity - MIN_WALLPAPER_MESSAGE_OPACITY) /
+    (MAX_WALLPAPER_MESSAGE_OPACITY - MIN_WALLPAPER_MESSAGE_OPACITY);
+  const messageOpacitySliderStyle = {
+    "--settings-slider-progress": `${messageOpacityRatio * 100}%`,
+    "--settings-slider-fill-offset": `${0.5 - messageOpacityRatio}rem`,
+  } as CSSProperties;
+
   const blurSliderStyle = {
     "--settings-slider-progress": `${blurRatio * 100}%`,
     "--settings-slider-fill-offset": `${0.5 - blurRatio}rem`,
@@ -331,6 +342,52 @@ export function WallpaperSettingsSection() {
             }
           />
 
+          <SettingsRow
+            {...searchableSetting("wallpaper-message-opacity")}
+            description="Control how transparent or opaque chat text boxes and message bubbles appear over the wallpaper."
+            resetAction={
+              wallpaperMessageOpacity !== DEFAULT_UNIFIED_SETTINGS.wallpaperMessageOpacity ? (
+                <SettingResetButton
+                  label="text box opacity"
+                  onClick={() =>
+                    updateSettings({
+                      wallpaperMessageOpacity: DEFAULT_UNIFIED_SETTINGS.wallpaperMessageOpacity,
+                    })
+                  }
+                />
+              ) : null
+            }
+            control={
+              <div className="flex w-full items-center gap-3 sm:w-52">
+                <output
+                  className="min-w-12 rounded-md bg-muted px-2 py-1 text-center font-mono text-xs font-medium tabular-nums text-foreground"
+                  htmlFor="wallpaper-message-opacity"
+                >
+                  {wallpaperMessageOpacity}%
+                </output>
+                <input
+                  aria-label="Text box opacity"
+                  className="settings-slider min-w-0 flex-1"
+                  id="wallpaper-message-opacity"
+                  max={MAX_WALLPAPER_MESSAGE_OPACITY}
+                  min={MIN_WALLPAPER_MESSAGE_OPACITY}
+                  onChange={(event) => {
+                    const value = Number(event.currentTarget.value);
+                    if (
+                      value >= MIN_WALLPAPER_MESSAGE_OPACITY &&
+                      value <= MAX_WALLPAPER_MESSAGE_OPACITY
+                    ) {
+                      updateSettings({ wallpaperMessageOpacity: value });
+                    }
+                  }}
+                  step={5}
+                  style={messageOpacitySliderStyle}
+                  type="range"
+                  value={wallpaperMessageOpacity}
+                />
+              </div>
+            }
+          />
           <SettingsRow
             {...searchableSetting("wallpaper-pixelated")}
             description="Maintain crisp pixel rendering without blur smoothing for 8-bit / pixel artwork."

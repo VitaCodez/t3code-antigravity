@@ -239,12 +239,14 @@ function WallpaperAppearanceSync() {
   const wallpaperMode = useClientSettings((settings) => settings.wallpaperMode);
   const wallpaperPreset = useClientSettings((settings) => settings.wallpaperPreset);
   const wallpaperAutoAccent = useClientSettings((settings) => settings.wallpaperAutoAccent);
+  const wallpaperMessageOpacity = useClientSettings((settings) => settings.wallpaperMessageOpacity);
 
   useEffect(() => {
     const root = document.documentElement;
     if (wallpaperMode === "none") {
       delete root.dataset.wallpaperActive;
       root.style.removeProperty("--wallpaper-accent");
+      root.style.removeProperty("--wallpaper-message-opacity");
       root.style.removeProperty("--primary");
       root.style.removeProperty("--ring");
       root.style.removeProperty("--focus");
@@ -252,6 +254,7 @@ function WallpaperAppearanceSync() {
     }
 
     root.dataset.wallpaperActive = "true";
+    root.style.setProperty("--wallpaper-message-opacity", `${wallpaperMessageOpacity}%`);
 
     if (wallpaperAutoAccent) {
       const accent = resolveWallpaperAccent(wallpaperMode, wallpaperPreset);
@@ -265,7 +268,7 @@ function WallpaperAppearanceSync() {
       root.style.removeProperty("--ring");
       root.style.removeProperty("--focus");
     }
-  }, [wallpaperMode, wallpaperPreset, wallpaperAutoAccent]);
+  }, [wallpaperMode, wallpaperPreset, wallpaperAutoAccent, wallpaperMessageOpacity]);
 
   return null;
 }

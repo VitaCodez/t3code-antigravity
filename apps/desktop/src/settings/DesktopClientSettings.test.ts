@@ -48,6 +48,7 @@ const clientSettings: ClientSettings = {
   wallpaperCustomUrl: "",
   wallpaperOpacity: 70,
   wallpaperBlur: 0,
+  wallpaperMessageOpacity: 45,
   wallpaperPixelated: false,
   wallpaperAutoAccent: true,
   retroFontPreset: "none",

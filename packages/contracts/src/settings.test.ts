@@ -245,6 +245,7 @@ describe("ClientSettings wallpaper settings", () => {
     expect(settings.wallpaperCustomUrl).toBe("");
     expect(settings.wallpaperOpacity).toBe(70);
     expect(settings.wallpaperBlur).toBe(0);
+    expect(settings.wallpaperMessageOpacity).toBe(45);
     expect(settings.wallpaperPixelated).toBe(false);
     expect(settings.wallpaperAutoAccent).toBe(true);
     expect(settings.retroFontPreset).toBe("none");
@@ -273,6 +274,20 @@ describe("ClientSettings wallpaper settings", () => {
   it.each([-1, 21])("rejects invalid wallpaper blur: %s", (value) => {
     expect(() => decodeClientSettings({ wallpaperBlur: value })).toThrow();
     expect(() => decodeClientSettingsPatch({ wallpaperBlur: value })).toThrow();
+  });
+
+  it.each([0, 30, 45, 100])("accepts wallpaper message opacity within range: %s", (value) => {
+    expect(decodeClientSettings({ wallpaperMessageOpacity: value }).wallpaperMessageOpacity).toBe(
+      value,
+    );
+    expect(
+      decodeClientSettingsPatch({ wallpaperMessageOpacity: value }).wallpaperMessageOpacity,
+    ).toBe(value);
+  });
+
+  it.each([-1, 101, 45.5])("rejects invalid wallpaper message opacity: %s", (value) => {
+    expect(() => decodeClientSettings({ wallpaperMessageOpacity: value })).toThrow();
+    expect(() => decodeClientSettingsPatch({ wallpaperMessageOpacity: value })).toThrow();
   });
 
   it.each(["none", "vt323", "press-start", "silkscreen", "retro-code"])(

@@ -125,6 +125,17 @@ export const WallpaperBlur = Schema.Int.check(
 export type WallpaperBlur = typeof WallpaperBlur.Type;
 export const DEFAULT_WALLPAPER_BLUR: WallpaperBlur = 0;
 
+export const MIN_WALLPAPER_MESSAGE_OPACITY = 0;
+export const MAX_WALLPAPER_MESSAGE_OPACITY = 100;
+export const WallpaperMessageOpacity = Schema.Int.check(
+  Schema.isBetween({
+    minimum: MIN_WALLPAPER_MESSAGE_OPACITY,
+    maximum: MAX_WALLPAPER_MESSAGE_OPACITY,
+  }),
+);
+export type WallpaperMessageOpacity = typeof WallpaperMessageOpacity.Type;
+export const DEFAULT_WALLPAPER_MESSAGE_OPACITY: WallpaperMessageOpacity = 45;
+
 export const RETRO_FONT_PRESETS = [
   "none",
   "vt323",
@@ -339,6 +350,9 @@ export const ClientSettingsSchema = Schema.Struct({
   ),
   wallpaperBlur: WallpaperBlur.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_WALLPAPER_BLUR)),
+  ),
+  wallpaperMessageOpacity: WallpaperMessageOpacity.pipe(
+    Schema.withDecodingDefault(Effect.succeed(DEFAULT_WALLPAPER_MESSAGE_OPACITY)),
   ),
   wallpaperPixelated: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   wallpaperAutoAccent: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
@@ -1307,6 +1321,7 @@ export const ClientSettingsPatch = Schema.Struct({
   wallpaperCustomUrl: Schema.optionalKey(Schema.String),
   wallpaperOpacity: Schema.optionalKey(WallpaperOpacity),
   wallpaperBlur: Schema.optionalKey(WallpaperBlur),
+  wallpaperMessageOpacity: Schema.optionalKey(WallpaperMessageOpacity),
   wallpaperPixelated: Schema.optionalKey(Schema.Boolean),
   wallpaperAutoAccent: Schema.optionalKey(Schema.Boolean),
   retroFontPreset: Schema.optionalKey(RetroFontPreset),

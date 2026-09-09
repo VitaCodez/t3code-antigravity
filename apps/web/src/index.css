@@ -2126,10 +2126,19 @@ html[data-wallpaper-active="true"] [data-chat-composer-overlay] h1 {
 /* Assistant message frosted glass card surface */
 html[data-wallpaper-active="true"]
   [data-timeline-row-kind="message"][data-message-role="assistant"] {
-  background-color: color-mix(in srgb, var(--card) 45%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--card) var(--wallpaper-message-opacity, 45%),
+    transparent
+  );
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--border) calc(var(--wallpaper-message-opacity, 45%) * 0.75),
+      transparent
+    );
   border-radius: 1.25rem;
   padding: 1.15rem 1.25rem 0.85rem 1.25rem;
   box-shadow: 0 4px 20px -2px rgb(0 0 0 / 25%);
@@ -2147,7 +2156,12 @@ html[data-wallpaper-active="true"]
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   box-shadow: 0 4px 16px -2px rgb(0 0 0 / 35%);
-  border: 1px solid color-mix(in srgb, var(--border) 35%, transparent);
+  border: 1px solid
+    color-mix(
+      in srgb,
+      var(--border) calc(var(--wallpaper-message-opacity, 45%) * 0.75),
+      transparent
+    );
 }
 
 /* Work group / tool calls frosted glass surface */
@@ -2155,7 +2169,11 @@ html[data-wallpaper-active="true"] [data-timeline-row-kind="work"],
 html[data-wallpaper-active="true"] [data-timeline-row-kind="work-live"],
 html[data-wallpaper-active="true"] [data-timeline-row-kind="work-toggle"],
 html[data-wallpaper-active="true"] [data-timeline-row-kind="thinking"] {
-  background-color: color-mix(in srgb, var(--card) 40%, transparent);
+  background-color: color-mix(
+    in srgb,
+    var(--card) calc(var(--wallpaper-message-opacity, 45%) * 0.85),
+    transparent
+  );
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid color-mix(in srgb, var(--border) 30%, transparent);

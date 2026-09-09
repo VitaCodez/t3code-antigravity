@@ -126,6 +126,13 @@ export const SETTINGS_SEARCH_ITEMS = [
     targetId: "appearance-wallpaper",
   },
   {
+    id: "wallpaper-message-opacity",
+    title: "Text box opacity",
+    to: "/settings/appearance",
+    searchTerms: ["message card opacity transparency text box frosted bubble readability"],
+    targetId: "appearance-wallpaper",
+  },
+  {
     id: "wallpaper-pixelated",
     title: "Pixel-art rendering",
     to: "/settings/appearance",
