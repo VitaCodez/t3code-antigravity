@@ -1,4 +1,4 @@
-# T3 Code (Antigravity Edition) currect version: v0.0.37
+# T3 Code  currect version: v0.0.40
 
 > [!IMPORTANT]
 > **Fork & Attribution Notice:**  
@@ -7,10 +7,10 @@
 
 ## Added Features & Modifications
 
-- **Antigravity AI Provider**: Added Google Antigravity (`agy` CLI) as an integrated coding agent provider alongside Claude, Codex, Cursor, Grok, and OpenCode.
 - **LaTeX Math Rendering**: Integrated full LaTeX rendering support for mathematical formulas and notation inside chat messages.
 - **Conversations Sidebar**: Added a dedicated **Conversations** field/history viewer in the sidebar for quickly browsing, searching, and opening recent conversation sessions.
 - **Antigravity cost and quota**: Added Antigravity cost and quota graph and usage overview
+- **Custom wallpaper**: Added option to put a wallpaper to t3code
 
 ---
 
