@@ -1,5 +1,4 @@
 import {
-  type AssistantCitation,
   type EnvironmentId,
   type MessageId,
   type ScopedThreadRef,
@@ -119,8 +118,6 @@ import {
 } from "./timelineScrollAnchoring";
 import { MessageCopyButton } from "./MessageCopyButton";
 import { PierreEntryIcon } from "./PierreEntryIcon";
-import { AssistantSelectionToolbar } from "./AssistantSelectionToolbar";
-import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import {
   AssistantCitationSource,
   type AssistantCitationRequest,
@@ -297,10 +294,6 @@ const TIMELINE_MAINTAIN_SCROLL_AT_END = {
 interface MessagesTimelineProps {
   citationRequest?: AssistantCitationRequest | null;
   citationHistoryLoading?: boolean;
-  onCiteAssistantText?: (
-    citation: AssistantCitation,
-    sourceAnchor: AssistantCitationSourceAnchor,
-  ) => boolean;
   agentPanelModel?: AgentPanelModel;
   onOpenAgents?: () => void;
   isWorking: boolean;
@@ -358,7 +351,6 @@ interface MessagesTimelineProps {
 export const MessagesTimeline = memo(function MessagesTimeline({
   citationRequest = null,
   citationHistoryLoading = false,
-  onCiteAssistantText,
   isWorking,
   isPreparingWorktree = false,
   isCompacting = false,
@@ -808,13 +800,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           className="relative h-full min-h-0"
           data-assistant-citation-viewport="true"
         >
-          {onCiteAssistantText && citationThreadRef ? (
-            <AssistantSelectionToolbar
-              viewport={timelineViewportElement}
-              threadRef={citationThreadRef}
-              onCite={onCiteAssistantText}
-            />
-          ) : null}
           <LegendList<MessagesTimelineRow>
             ref={listRef}
             data={rows}

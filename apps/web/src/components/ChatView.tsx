@@ -9,7 +9,6 @@ import { feedbackBannerItem } from "./chat/ComposerFeedback";
 import { usageLimitsBannerItem } from "./chat/ComposerUsageLimits";
 import { derivePendingRequests } from "@t3tools/client-runtime/pending-requests";
 import {
-  type AssistantCitation,
   type ApprovalRequestId,
   type ChatFileAttachment,
   DEFAULT_MODEL,
@@ -86,7 +85,6 @@ import { flushSync } from "react-dom";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { assistantCitationsToPlainText } from "@t3tools/shared/assistantCitations";
 import { assistantCitationFromLocation } from "../lib/assistantCitationNavigation";
-import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { useShallow } from "zustand/react/shallow";
 import {
   isAtomCommandInterrupted,
@@ -1559,21 +1557,6 @@ export default function ChatView(props: ChatViewProps) {
   const [restingComposerControlsHost, setRestingComposerControlsHost] =
     useState<HTMLDivElement | null>(null);
   const [restingComposerControlsVisible, setRestingComposerControlsVisible] = useState(false);
-  const citeAssistantText = useCallback(
-    (citation: AssistantCitation, sourceAnchor: AssistantCitationSourceAnchor) => {
-      const inserted = composerRef.current?.citeAssistantText(citation, sourceAnchor) ?? false;
-      if (!inserted) {
-        toastManager.add({
-          type: "warning",
-          title: "The composer is not ready",
-          description:
-            "Try citing the selection after the connection or pending input is resolved.",
-        });
-      }
-      return inserted;
-    },
-    [composerRef],
-  );
   const [isWorkspaceFileDragActive, setIsWorkspaceFileDragActive] = useState(false);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [expandedImage, setExpandedImage] = useState<ExpandedImagePreview | null>(null);
@@ -7956,7 +7939,6 @@ export default function ChatView(props: ChatViewProps) {
               <MessagesTimeline
                 citationRequest={citationRequest}
                 citationHistoryLoading={threadDetailLoading}
-                onCiteAssistantText={citeAssistantText}
                 agentPanelModel={agentPanelModel}
                 onOpenAgents={addAgentsSurface}
                 key={activeThread.id}
