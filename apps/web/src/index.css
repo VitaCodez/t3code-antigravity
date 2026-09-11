@@ -152,6 +152,8 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
      compositor updates discrete frames instead of every vsync. */
   --animate-status-pulse: status-pulse 2s infinite;
   --animate-status-ping: status-ping 2s infinite;
+  /* Voice-input recording dot: stepped breathe, mounted only while recording. */
+  --animate-voice-pulse: voice-pulse 1.8s infinite;
   --color-warning-foreground: var(--warning-foreground);
   --color-warning: var(--warning);
   --color-warning-surface: var(--warning-surface);
@@ -255,6 +257,21 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
     100% {
       opacity: 0;
       scale: 2;
+    }
+  }
+  @keyframes voice-pulse {
+    0%,
+    35% {
+      opacity: 1;
+      animation-timing-function: steps(4);
+    }
+    50%,
+    85% {
+      opacity: 0.45;
+      animation-timing-function: steps(4);
+    }
+    100% {
+      opacity: 1;
     }
   }
 }
